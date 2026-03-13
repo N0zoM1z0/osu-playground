@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "osu-lab"
+version = "0.1.0"
+description = "Local-only R&D toolkit for osu!standard on Windows"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Codex" }]
+dependencies = [
+  "osrparse>=7.0.1",
+  "slider>=0.8.4",
+  "rosu-pp-py>=3.1.0",
+]
+
+[project.optional-dependencies]
+audio = [
+  "allin1>=1.1.0",
+  "librosa>=0.10.2",
+]
+dev = [
+  "pytest>=8.2.0",
+]
+
+[project.scripts]
+osu-lab = "osu_lab.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
