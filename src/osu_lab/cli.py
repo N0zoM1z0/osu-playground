@@ -106,7 +106,12 @@ def build_parser() -> argparse.ArgumentParser:
     schema_dump.add_argument("--out")
 
     bench = subparsers.add_parser("bench")
-    bench.add_argument("fixtures_dir")
+    bench.add_argument("fixtures_dir", nargs="?")
+    bench.add_argument("--audio")
+    bench.add_argument("--out-dir")
+    bench.add_argument("--prompt", action="append", default=[])
+    bench.add_argument("--reference-map", action="append", default=[])
+    bench.add_argument("--seed", type=int, default=1)
     return parser
 
 
@@ -259,6 +264,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "bench":
+        from osu_lab.eval.bench import benchmark_style_control
+
+        if args.audio:
+            json_print(
+                benchmark_style_control(
+                    audio_path=args.audio,
+                    output_dir=args.out_dir or "/tmp/osu-lab-bench",
+                    prompts=args.prompt or ["jump", "stream", "flow aim"],
+                    reference_maps=args.reference_map,
+                    seed=args.seed,
+                )
+            )
+            return 0
         json_print(benchmark_summary(args.fixtures_dir))
         return 0
 
