@@ -12,7 +12,7 @@ from osu_lab.core.models import AudioAnalysis, BeatmapIR, HitObjectIR, Segment, 
 from osu_lab.core.utils import clamp, dataclass_to_dict
 from osu_lab.integration.scoring import score_map
 from osu_lab.style.patterns import adapt_pattern_to_context, extract_pattern_bank, select_patterns
-from osu_lab.style.profile import build_style_profile, build_style_profile as _build_style_profile_single, style_distance
+from osu_lab.style.profile import build_style_profile, build_style_profile as _build_style_profile_single, render_style_report, style_distance
 from osu_lab.style.prompt import parse_style_prompt
 
 
@@ -565,6 +565,7 @@ def generate_map(
     write_ir_json(beatmap, ir_path)
     package_osz(osu_path, osz_path, asset_paths=[analysis.path])
     final_score = score_map(osu_path)
+    generated_profile = _build_style_profile_single([osu_path])
     hitsound_summary = {
         "whistle": sum(1 for item in beatmap.objects if item.hitsounds & 2),
         "finish": sum(1 for item in beatmap.objects if item.hitsounds & 4),
@@ -577,6 +578,8 @@ def generate_map(
         "analysis_path": analysis.path,
         "style_target": dataclass_to_dict(style_target),
         "style_profile": dataclass_to_dict(style_profile) if style_profile else None,
+        "generated_style_profile": dataclass_to_dict(generated_profile),
+        "style_report": render_style_report(generated_profile),
         "pattern_count": len(pattern_bank),
         "tuning_history": tuning_history,
         "final_score": final_score,

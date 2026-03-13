@@ -11,13 +11,14 @@ from osu_lab.beatmap.verify_external import run_external_verifier
 from osu_lab.core.schema import schema_bundle
 from osu_lab.core.models import StyleProfile
 from osu_lab.core.utils import dataclass_to_dict, json_dump, json_print
+from osu_lab.eval.acceptance import run_acceptance
 from osu_lab.eval.bench import benchmark_summary
 from osu_lab.generate.mapforge import generate_map
 from osu_lab.integration.scoring import score_map
 from osu_lab.live.planner import arm_live_plan, plan_live_play
 from osu_lab.replay.synth import dump_replay_plan, inspect_replay, write_replay
 from osu_lab.style.corpus import build_style_index, load_style_index
-from osu_lab.style.profile import build_style_profile, classify_map
+from osu_lab.style.profile import build_style_profile, classify_map, render_style_report
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -114,15 +115,23 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--prompt", action="append", default=[])
     bench.add_argument("--reference-map", action="append", default=[])
     bench.add_argument("--seed", type=int, default=1)
+    bench.add_argument("--acceptance", action="store_true")
+    bench.add_argument("--target-star", type=float)
+    bench.add_argument("--target-pp", type=float)
+    bench.add_argument("--external-command")
+    bench.add_argument("--min-fixture-count", type=int, default=50)
     return parser
 
 
 def _verify_path(path: Path, external_command: str | None = None) -> dict[str, object]:
     beatmap = parse_osu(path)
     issues = verify_beatmap(beatmap)
+    error_count = len([issue for issue in issues if issue.severity == "error"])
+    warning_count = len([issue for issue in issues if issue.severity == "warning"])
     return {
         "path": str(path),
-        "issue_count": len(issues),
+        "issue_count": error_count,
+        "warning_count": warning_count,
         "issues": [dataclass_to_dict(issue) for issue in issues],
         "external": run_external_verifier(path, command=external_command),
     }
@@ -240,7 +249,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "style" and args.style_command == "profile":
         profile = build_style_profile(args.maps)
-        json_print({"profile": profile, "classifications": {path: classify_map(path) for path in args.maps}})
+        json_print(
+            {
+                "profile": profile,
+                "report": render_style_report(profile),
+                "classifications": {path: classify_map(path) for path in args.maps},
+            }
+        )
         return 0
 
     if args.command == "ai" and args.ai_command == "draft":
@@ -271,6 +286,25 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "bench":
         from osu_lab.eval.bench import benchmark_style_control
 
+        if args.acceptance:
+            if not args.fixtures_dir:
+                json_print({"status": "error", "message": "bench --acceptance requires fixtures_dir"})
+                return 1
+            json_print(
+                run_acceptance(
+                    fixtures_dir=args.fixtures_dir,
+                    audio_path=args.audio,
+                    output_dir=args.out_dir,
+                    prompts=args.prompt,
+                    reference_maps=args.reference_map,
+                    seed=args.seed,
+                    target_star=args.target_star,
+                    target_pp=args.target_pp,
+                    external_command=args.external_command,
+                    min_fixture_count=args.min_fixture_count,
+                )
+            )
+            return 0
         if args.audio:
             json_print(
                 benchmark_style_control(

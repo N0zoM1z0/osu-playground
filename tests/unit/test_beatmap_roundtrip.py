@@ -2,6 +2,7 @@ from pathlib import Path
 
 from osu_lab.beatmap.io import compile_osu, parse_osu
 from osu_lab.beatmap.validate import verify_beatmap
+from osu_lab.core.models import BeatmapIR, HitObjectIR, TimingGrid, TimingPoint, default_metadata
 
 
 def test_parse_compile_roundtrip():
@@ -24,3 +25,13 @@ def test_verify_fixture_has_no_errors():
     issues = verify_beatmap(beatmap)
     assert [issue for issue in issues if issue.severity == "error"] == []
 
+
+def test_verify_reports_unsnapped_object():
+    beatmap = BeatmapIR(
+        metadata=default_metadata("virtual.wav"),
+        difficulty_settings={"SliderMultiplier": 1.4},
+        timing_grid=TimingGrid(uninherited_points=[TimingPoint(offset_ms=0.0, beat_length_ms=500.0)]),
+        objects=[HitObjectIR(type="circle", start_ms=347, end_ms=347, x=256, y=192)],
+    )
+    issues = verify_beatmap(beatmap)
+    assert any(issue.code == "snap-start" for issue in issues)

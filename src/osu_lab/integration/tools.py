@@ -14,7 +14,7 @@ from osu_lab.integration.scoring import score_map
 from osu_lab.live.planner import plan_live_play
 from osu_lab.replay.synth import synthesize_replay_plan
 from osu_lab.style.corpus import build_style_index
-from osu_lab.style.profile import build_style_profile, classify_map
+from osu_lab.style.profile import build_style_profile, classify_map, render_style_report
 
 
 def analyze_audio_tool(path: str) -> dict[str, object]:
@@ -22,7 +22,8 @@ def analyze_audio_tool(path: str) -> dict[str, object]:
 
 
 def build_style_profile_tool(ref_maps: list[str]) -> dict[str, object]:
-    return dataclass_to_dict(build_style_profile(ref_maps))
+    profile = build_style_profile(ref_maps)
+    return {"profile": dataclass_to_dict(profile), "report": render_style_report(profile)}
 
 
 def build_style_index_tool(paths: list[str]) -> dict[str, object]:
@@ -53,7 +54,8 @@ def verify_map_tool(path: str) -> dict[str, object]:
     issues = verify_beatmap(beatmap)
     return {
         "path": str(path),
-        "issue_count": len(issues),
+        "issue_count": len([issue for issue in issues if issue.severity == "error"]),
+        "warning_count": len([issue for issue in issues if issue.severity == "warning"]),
         "issues": [dataclass_to_dict(issue) for issue in issues],
         "external": run_external_verifier(path),
     }

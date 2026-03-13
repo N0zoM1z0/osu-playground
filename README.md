@@ -26,6 +26,7 @@ The current implementation provides a working v0.1 foundation:
 - external verifier hook for `MapsetVerifier` or a custom command
 - non-interactive AI draft adapters for `claude`, `droid`, and native `kimi`
 - `rosu-pp-py` based map scoring
+- acceptance harnesses for round-trip, replay determinism, map validity, and style control
 - JSON-first CLI and automated tests
 
 Windows live injection remains dry-run-first by default. Online score submission, multiplayer automation, anti-detection workflows, and client modification remain out of scope.
@@ -93,6 +94,7 @@ Draft with native Kimi international API:
 
 ```bash
 osu-lab ai draft kimi /path/to/song.wav --prompt "jump,flow aim" --dotenv-path .env
+osu-lab bench /path/to/fixtures --acceptance --audio /path/to/song.wav --out-dir /tmp/acceptance --prompt jump --prompt stream
 ```
 
 Score a map with `rosu-pp-py`:
@@ -155,7 +157,10 @@ docs/
 - `style build-index` is the intended way to learn from a user-supplied local corpus without bundling third-party beatmaps into the repository.
 - `map generate` can consume both `--reference-map` inputs and a prebuilt `--style-index`, and now emits a section density plan in the resulting `style_target`.
 - `style build-index` now stores a lightweight pattern bank, and `map generate` can stamp retrieved reference patterns into the arranged output instead of relying only on global histogram bias.
+- stitched reference patterns are now continuity-aware: they can be mirrored, rotated, and rescaled before placement to better fit section spacing and playfield bounds.
 - generated maps now include rule-based hitsound assignment and stronger section-level arrangement differences such as chorus emphasis and break-safe spinner opportunities.
+- `style profile` and `map generate` now emit a human-readable style report alongside raw metrics.
+- `bench --acceptance` aggregates round-trip stability, replay determinism, generated-map validity, difficulty targeting, and style controllability in one JSON report.
 
 ## Docs
 

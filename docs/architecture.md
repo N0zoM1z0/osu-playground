@@ -23,6 +23,7 @@ The main rule is that agent-facing tools operate on structured objects, not on r
 - `ai`: optional external CLI adapters with structured recipe normalization
 - `integration`: scoring and agent-callable tool wrappers
 - `eval`: benchmark placeholders and acceptance harness entry points
+- `eval.acceptance`: round-trip, replay, generation, and style-control acceptance aggregation
 
 ## Data Flow
 
@@ -93,6 +94,7 @@ The generator is now section-aware:
 - it can blend in density tendencies from a local reference corpus
 - it can consume explicit reference maps supplied by the user at generation time
 - it assigns simple hitsounds and adjusts object mix by section label
+- it adapts retrieved reference patterns with continuity-aware mirroring, rotation, and rescaling before stitching them into the arranged output
 
 ### Style Corpus
 
@@ -107,6 +109,7 @@ The repository does not ship third-party beatmaps. Instead, the workflow expects
 - lightweight pattern banks for retrieval-driven arrangement
 
 This keeps the project local-only while still enabling prompt and reference driven generation.
+Generated outputs also include a short human-readable style report so agent and CLI consumers can inspect why a map reads as jump-heavy, stream-heavy, or flow-oriented.
 
 ### Live
 

@@ -165,6 +165,23 @@ def classify_map(map_path: str | Path) -> dict[str, float]:
     return profile.jump_stream_tech_scores
 
 
+def render_style_report(profile: StyleProfile) -> str:
+    dominant = max(profile.jump_stream_tech_scores, key=profile.jump_stream_tech_scores.get) if profile.jump_stream_tech_scores else "unknown"
+    parts = [
+        f"dominant={dominant}",
+        f"slider_ratio={profile.slider_ratio:.2f}",
+        f"jump={profile.jump_stream_tech_scores.get('jump', 0.0):.2f}",
+        f"stream={profile.jump_stream_tech_scores.get('stream', 0.0):.2f}",
+        f"tech={profile.jump_stream_tech_scores.get('tech', 0.0):.2f}",
+        f"flow={profile.jump_stream_tech_scores.get('flow', 0.0):.2f}",
+        f"burst_ratio={profile.burst_profile.get('burst_ratio', 0.0):.2f}",
+        f"mean_gap_ms={profile.burst_profile.get('mean_gap_ms', 0.0):.1f}",
+    ]
+    if profile.source_maps:
+        parts.append(f"sources={len(profile.source_maps)}")
+    return " | ".join(parts)
+
+
 def style_distance(left: StyleProfile, right: StyleProfile) -> float:
     score = 0.0
     for key in ("jump", "stream", "tech", "flow"):
