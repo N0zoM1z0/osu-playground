@@ -1,0 +1,28 @@
+{
+  "stable_root": "%localappdata%/osu!",
+  "audio": {
+    "normalize_to_wav": true,
+    "normalization_dir": "%TEMP%/osu-lab-audio"
+  },
+  "replay": {
+    "default_profile": "auto_perfect",
+    "default_seed": 1,
+    "username": "osu-lab"
+  },
+  "live": {
+    "provider": "direct-file/manual",
+    "client_width": 1280,
+    "client_height": 960,
+    "dry_run": true
+  },
+  "generation": {
+    "prompt": "mixed",
+    "target_star": 5.0,
+    "target_pp": 220.0
+  },
+  "style": {
+    "reference_roots": [
+      "D:/osu/Songs/ReferencePack"
+    ]
+  }
+}

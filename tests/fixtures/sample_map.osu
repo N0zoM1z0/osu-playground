@@ -1,0 +1,39 @@
+osu file format v14
+
+[General]
+AudioFilename: sample.wav
+PreviewTime: -1
+Mode: 0
+
+[Metadata]
+Title: Sample
+TitleUnicode: Sample
+Artist: Test
+ArtistUnicode: Test
+Creator: Codex
+Version: Normal
+Source: local
+Tags: fixture
+BeatmapID: 0
+BeatmapSetID: -1
+
+[Difficulty]
+HPDrainRate: 5
+CircleSize: 4
+OverallDifficulty: 7
+ApproachRate: 8
+SliderMultiplier: 1.4
+SliderTickRate: 1
+
+[Events]
+0,0,"bg.jpg",0,0
+
+[TimingPoints]
+0,500,4,2,1,80,1,0
+
+[HitObjects]
+128,192,1000,1,0,0:0:0:0:
+384,192,1500,1,0,0:0:0:0:
+256,96,2000,2,0,B|320:96|384:160,1,180
+256,192,3000,12,0,3800,0:0:0:0:
+
