@@ -5,15 +5,16 @@ from pathlib import Path
 
 from osu_lab.ai.adapters import draft_with_backend
 from osu_lab.audio.analyze import analyze_audio
-from osu_lab.beatmap.io import package_osz, parse_osu, write_ir_json, write_osu
+from osu_lab.beatmap.io import parse_osu
 from osu_lab.beatmap.validate import verify_beatmap
+from osu_lab.beatmap.verify_external import run_external_verifier
 from osu_lab.core.schema import schema_bundle
-from osu_lab.core.utils import json_dump, json_print
+from osu_lab.core.utils import dataclass_to_dict, json_dump, json_print
 from osu_lab.eval.bench import benchmark_summary
 from osu_lab.generate.mapforge import generate_map
 from osu_lab.integration.scoring import score_map
 from osu_lab.live.planner import arm_live_plan, plan_live_play
-from osu_lab.replay.synth import dump_replay_plan, inspect_replay, synthesize_replay_plan, write_replay
+from osu_lab.replay.synth import dump_replay_plan, inspect_replay, write_replay
 from osu_lab.style.profile import build_style_profile, classify_map
 
 
@@ -42,14 +43,21 @@ def build_parser() -> argparse.ArgumentParser:
     live = subparsers.add_parser("live")
     live_sub = live.add_subparsers(dest="live_command", required=True)
     live_plan = live_sub.add_parser("plan")
-    live_plan.add_argument("map")
+    live_plan.add_argument("map", nargs="?", default="")
     live_plan.add_argument("--profile", default="auto_perfect")
+    live_plan.add_argument("--provider", choices=["direct-file/manual", "tosu"], default="direct-file/manual")
+    live_plan.add_argument("--tosu-base-url", default="http://127.0.0.1:24050")
+    live_plan.add_argument("--cache-dir")
     live_plan.add_argument("--width", type=int, default=1280)
     live_plan.add_argument("--height", type=int, default=960)
     live_arm = live_sub.add_parser("arm")
-    live_arm.add_argument("map")
+    live_arm.add_argument("map", nargs="?", default="")
     live_arm.add_argument("--profile", default="auto_perfect")
+    live_arm.add_argument("--provider", choices=["direct-file/manual", "tosu"], default="direct-file/manual")
+    live_arm.add_argument("--tosu-base-url", default="http://127.0.0.1:24050")
+    live_arm.add_argument("--cache-dir")
     live_arm.add_argument("--inject", action="store_true")
+    live_arm.add_argument("--lead-in-ms", type=int, default=1000)
 
     map_parser = subparsers.add_parser("map")
     map_sub = map_parser.add_subparsers(dest="map_command", required=True)
@@ -62,6 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
     map_generate.add_argument("--target-pp", type=float)
     map_verify = map_sub.add_parser("verify")
     map_verify.add_argument("path")
+    map_verify.add_argument("--external-command")
     map_score = map_sub.add_parser("score")
     map_score.add_argument("path")
     map_score.add_argument("--mods", default="")
@@ -80,7 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
     ai_draft = ai_sub.add_parser("draft")
     ai_draft.add_argument("backend")
     ai_draft.add_argument("audio")
+    ai_draft.add_argument("--prompt", default="mixed")
     ai_draft.add_argument("--out")
+    ai_draft.add_argument("--seed", type=int, default=1)
+    ai_draft.add_argument("--target-star", type=float)
+    ai_draft.add_argument("--target-pp", type=float)
 
     schema = subparsers.add_parser("schema")
     schema_sub = schema.add_subparsers(dest="schema_command", required=True)
@@ -92,10 +105,15 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _verify_path(path: Path) -> dict[str, object]:
+def _verify_path(path: Path, external_command: str | None = None) -> dict[str, object]:
     beatmap = parse_osu(path)
     issues = verify_beatmap(beatmap)
-    return {"path": str(path), "issue_count": len(issues), "issues": [issue.__dict__ for issue in issues]}
+    return {
+        "path": str(path),
+        "issue_count": len(issues),
+        "issues": [dataclass_to_dict(issue) for issue in issues],
+        "external": run_external_verifier(path, command=external_command),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -122,13 +140,35 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "live" and args.live_command == "plan":
-        plan = plan_live_play(args.map, profile=args.profile, client_width=args.width, client_height=args.height)
+        try:
+            plan = plan_live_play(
+                args.map,
+                profile=args.profile,
+                provider=args.provider,
+                client_width=args.width,
+                client_height=args.height,
+                tosu_base_url=args.tosu_base_url,
+                cache_dir=args.cache_dir,
+            )
+        except Exception as exc:
+            json_print({"status": "error", "provider": args.provider, "message": str(exc)})
+            return 1
         json_print(plan)
         return 0
 
     if args.command == "live" and args.live_command == "arm":
-        plan = plan_live_play(args.map, profile=args.profile)
-        json_print(arm_live_plan(plan, dry_run=not args.inject))
+        try:
+            plan = plan_live_play(
+                args.map,
+                profile=args.profile,
+                provider=args.provider,
+                tosu_base_url=args.tosu_base_url,
+                cache_dir=args.cache_dir,
+            )
+        except Exception as exc:
+            json_print({"status": "error", "provider": args.provider, "message": str(exc)})
+            return 1
+        json_print(arm_live_plan(plan, dry_run=not args.inject, lead_in_ms=args.lead_in_ms))
         return 0
 
     if args.command == "map" and args.map_command == "generate":
@@ -147,10 +187,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "map" and args.map_command == "verify":
         path = Path(args.path)
         if path.is_dir():
-            results = [_verify_path(item) for item in sorted(path.rglob("*.osu"))]
+            results = [_verify_path(item, external_command=args.external_command) for item in sorted(path.rglob("*.osu"))]
             json_print({"path": str(path), "maps": results})
             return 0
-        json_print(_verify_path(path))
+        json_print(_verify_path(path, external_command=args.external_command))
         return 0
 
     if args.command == "map" and args.map_command == "score":
@@ -171,7 +211,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "ai" and args.ai_command == "draft":
-        json_print(draft_with_backend(args.backend, args.audio, output_path=args.out))
+        json_print(
+            draft_with_backend(
+                args.backend,
+                args.audio,
+                output_path=args.out,
+                prompt=args.prompt,
+                seed=args.seed,
+                target_star=args.target_star,
+                target_pp=args.target_pp,
+            )
+        )
         return 0
 
     if args.command == "schema" and args.schema_command == "dump":
