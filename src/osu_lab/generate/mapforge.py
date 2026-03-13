@@ -134,27 +134,49 @@ def _select_style_profile(reference_maps: list[str | Path] | None, profile: Styl
     return profile
 
 
-def _select_pattern_bank(reference_maps: list[str | Path] | None, style_index: dict[str, object] | None, tags: set[str]) -> list[dict[str, object]]:
+def _preferred_mode(tags: set[str]) -> str:
+    if "deathstream" in tags or "stream" in tags:
+        return "stream"
+    if "flow aim" in tags:
+        return "flow aim"
+    if "jump" in tags or "farm jump" in tags:
+        return "jump"
+    return "mixed"
+
+
+def _select_pattern_bank(reference_maps: list[str | Path] | None, style_index: dict[str, object] | None) -> list[dict[str, object]]:
     if style_index and isinstance(style_index.get("patterns"), dict):
-        preferred_key = "mixed"
-        if "deathstream" in tags or "stream" in tags:
-            preferred_key = "stream"
-        elif "flow aim" in tags:
-            preferred_key = "flow aim"
-        elif "jump" in tags or "farm jump" in tags:
-            preferred_key = "jump"
-        patterns = style_index["patterns"].get(preferred_key) or style_index["patterns"].get("mixed") or []
-        return [pattern for pattern in patterns if isinstance(pattern, dict)]
+        aggregated = []
+        for by_section in style_index["patterns"].values():
+            if not isinstance(by_section, dict):
+                continue
+            for patterns in by_section.values():
+                if isinstance(patterns, list):
+                    aggregated.extend(pattern for pattern in patterns if isinstance(pattern, dict))
+        deduped = {}
+        for pattern in aggregated:
+            key = (pattern.get("source_map"), pattern.get("source_start"), pattern.get("label"))
+            deduped[key] = pattern
+        return list(deduped.values())
     if reference_maps:
-        bank = extract_pattern_bank(reference_maps)
-        if "deathstream" in tags or "stream" in tags:
-            return select_patterns(bank, "stream")
-        if "flow aim" in tags:
-            return select_patterns(bank, "flow aim")
-        if "jump" in tags or "farm jump" in tags:
-            return select_patterns(bank, "jump")
-        return select_patterns(bank, "mixed")
+        return extract_pattern_bank(reference_maps)
     return []
+
+
+def _patterns_for_section(
+    pattern_bank: list[dict[str, object]],
+    tags: set[str],
+    section_label: str,
+    target_stars: float | None,
+    target_density: float | None,
+) -> list[dict[str, object]]:
+    return select_patterns(
+        pattern_bank,
+        mode=_preferred_mode(tags),
+        section_label=section_label,
+        target_stars=target_stars,
+        target_density=target_density,
+    )
 
 
 def _stamp_pattern(pattern: dict[str, object], origin_x: int, origin_y: int, start_time: int, beat_length: float) -> list[HitObjectIR]:
@@ -230,8 +252,15 @@ def arrange_objects(
         object_interval_ms = max(1, int(round(beat_length * step)))
         if previous_start is not None and beat - previous_start < max(10, int(round(beat_length / 4))):
             continue
-        if pattern_bank and emitted % 8 == 0 and rng.random() < 0.4:
-            pattern = pattern_bank[emitted % len(pattern_bank)]
+        section_patterns = _patterns_for_section(
+            pattern_bank,
+            tags=tags,
+            section_label=str(section["label"]),
+            target_stars=style_target.target_star,
+            target_density=local_density_scale,
+        )
+        if section_patterns and emitted % 8 == 0 and rng.random() < 0.4:
+            pattern = section_patterns[emitted % len(section_patterns)]
             seeded_x = int(clamp((96 if emitted % 2 == 0 else 416) + rng.randint(-20, 20), 32, 480))
             seeded_y = int(clamp(96 + (emitted % 5) * 48 + rng.randint(-10, 10), 32, 352))
             stamped = _stamp_pattern(pattern, seeded_x, seeded_y, beat, beat_length)
@@ -416,7 +445,7 @@ def generate_map(
     if reference_maps:
         style_target.reference_maps = [str(Path(path)) for path in reference_maps]
     style_profile = _select_style_profile(reference_maps, profile)
-    pattern_bank = _select_pattern_bank(reference_maps, style_index, _tag_set(style_target))
+    pattern_bank = _select_pattern_bank(reference_maps, style_index)
     style_target.section_density_plan = build_section_density_plan(analysis, style_target, style_profile=style_profile)
     beatmap = draft_skeleton(analysis, style_target)
     beatmap, tuning_history = _tune_map(

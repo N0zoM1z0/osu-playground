@@ -10,4 +10,5 @@ def test_style_index_roundtrip(tmp_path: Path):
     loaded = load_style_index(target)
     assert loaded["map_count"] == 1
     assert loaded["aggregate"]["source_maps"] == ["tests/fixtures/sample_map.osu"]
-    assert loaded["patterns"]["jump"]
+    assert loaded["patterns"]["jump"]["main"]
+    assert loaded["patterns"]["mixed"]["chorus"] is not None

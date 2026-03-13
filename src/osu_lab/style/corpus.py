@@ -20,16 +20,18 @@ def build_style_index(paths: list[str | Path]) -> dict[str, object]:
     profiles = [extract_map_style_metrics(path) for path in unique_maps]
     aggregate = merge_style_profiles(profiles)
     pattern_bank = extract_pattern_bank(unique_maps)
+    patterns_by_mode = {}
+    for mode in ("jump", "stream", "flow aim", "mixed"):
+        patterns_by_mode[mode] = {
+            "main": select_patterns(pattern_bank, mode, section_label="main"),
+            "chorus": select_patterns(pattern_bank, mode, section_label="chorus"),
+            "break": select_patterns(pattern_bank, mode, section_label="break"),
+        }
     return {
         "map_count": len(profiles),
         "maps": [dataclass_to_dict(profile) for profile in profiles],
         "aggregate": dataclass_to_dict(aggregate),
-        "patterns": {
-            "jump": select_patterns(pattern_bank, "jump"),
-            "stream": select_patterns(pattern_bank, "stream"),
-            "flow aim": select_patterns(pattern_bank, "flow aim"),
-            "mixed": select_patterns(pattern_bank, "mixed"),
-        },
+        "patterns": patterns_by_mode,
     }
 
 
