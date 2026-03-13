@@ -92,6 +92,7 @@ The generator is now section-aware:
 - it derives a section density plan from audio segments
 - it can blend in density tendencies from a local reference corpus
 - it can consume explicit reference maps supplied by the user at generation time
+- it assigns simple hitsounds and adjusts object mix by section label
 
 ### Style Corpus
 

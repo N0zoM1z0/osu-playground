@@ -65,6 +65,40 @@ def _slider_probability(tags: set[str], slider_ratio_bias: float) -> float:
     return clamp(base * slider_ratio_bias, 0.02, 0.45)
 
 
+def _section_mix(section_label: str, tags: set[str]) -> dict[str, float]:
+    label = section_label.lower()
+    config = {
+        "spacing_multiplier": 1.0,
+        "slider_multiplier": 1.0,
+        "spinner_chance": 0.0,
+    }
+    if label in {"chorus", "drop", "climax", "drive"}:
+        config["spacing_multiplier"] = 1.12 if "jump" in tags else 1.04
+        config["slider_multiplier"] = 1.15 if "flow aim" in tags else 1.05
+    elif label in {"break", "outro", "bridge"}:
+        config["spacing_multiplier"] = 0.8
+        config["slider_multiplier"] = 0.75
+        config["spinner_chance"] = 0.18
+    return config
+
+
+def _hitsound_for_object(start_ms: int, beat_length: float, object_type: str, section_label: str, index: int) -> int:
+    beat_index = int(round(start_ms / max(1.0, beat_length)))
+    label = section_label.lower()
+    hitsound = 0
+    if beat_index % 4 == 0:
+        hitsound |= 4  # finish
+    elif beat_index % 2 == 0:
+        hitsound |= 8  # clap
+    if object_type == "slider":
+        hitsound |= 2  # whistle
+    if label in {"chorus", "drop", "climax"} and index % 3 == 0:
+        hitsound |= 8
+    if label in {"break", "outro"} and object_type == "spinner":
+        hitsound |= 4
+    return hitsound
+
+
 def draft_skeleton(audio_analysis: AudioAnalysis, style_target: StyleTarget) -> BeatmapIR:
     timing_grid = build_timing_grid(audio_analysis)
     metadata = default_metadata(audio_filename=Path(audio_analysis.path).name, title=Path(audio_analysis.path).stem, version="Draft")
@@ -252,6 +286,9 @@ def arrange_objects(
         object_interval_ms = max(1, int(round(beat_length * step)))
         if previous_start is not None and beat - previous_start < max(10, int(round(beat_length / 4))):
             continue
+        section_mix = _section_mix(str(section["label"]), tags)
+        section_spacing = int(max(32, spacing * section_mix["spacing_multiplier"]))
+        section_slider_probability = clamp(slider_probability * section_mix["slider_multiplier"], 0.02, 0.55)
         section_patterns = _patterns_for_section(
             pattern_bank,
             tags=tags,
@@ -270,6 +307,13 @@ def arrange_objects(
                 if stamped_object.start_ms - last_end < 10:
                     continue
                 stamped_object.semantic_role = f"generated:pattern:{section['label']}"
+                stamped_object.hitsounds = _hitsound_for_object(
+                    stamped_object.start_ms,
+                    beat_length,
+                    stamped_object.type,
+                    str(section["label"]),
+                    emitted + len(safe_stamped),
+                )
                 safe_stamped.append(stamped_object)
                 last_end = stamped_object.end_ms
             if safe_stamped:
@@ -281,12 +325,30 @@ def arrange_objects(
                 direction *= -1
                 continue
 
+        if section_mix["spinner_chance"] > 0 and emitted % 12 == 0 and rng.random() < section_mix["spinner_chance"]:
+            spinner_duration = max(int(beat_length * 2), min(int(beat_length * 4), object_interval_ms * 2))
+            spinner = HitObjectIR(
+                type="spinner",
+                start_ms=beat,
+                end_ms=beat + spinner_duration,
+                x=256,
+                y=192,
+                hitsounds=_hitsound_for_object(beat, beat_length, "spinner", str(section["label"]), emitted),
+                semantic_role=f"generated:spinner:{section['label']}",
+            )
+            objects.append(spinner)
+            emitted += 1
+            previous_start = spinner.end_ms
+            x = 256
+            y = 192
+            continue
+
         if "flow aim" in tags:
             angle = emitted * 0.58
-            x = int(clamp(256 + math_cos(angle) * spacing, 32, 480))
-            y = int(clamp(192 + math_sin(angle) * (spacing * 0.8), 32, 352))
+            x = int(clamp(256 + math_cos(angle) * section_spacing, 32, 480))
+            y = int(clamp(192 + math_sin(angle) * (section_spacing * 0.8), 32, 352))
         elif "stream" in tags or "deathstream" in tags:
-            x = int(clamp(x + direction * spacing, 32, 480))
+            x = int(clamp(x + direction * section_spacing, 32, 480))
             y = int(clamp(192 + ((emitted % 6) - 2.5) * 18, 32, 352))
             if x in {32, 480}:
                 direction *= -1
@@ -299,19 +361,19 @@ def arrange_objects(
         length = 0.0
         curve: list[tuple[int, int]] = []
         end_ms = beat
-        if rng.random() < slider_probability and emitted % 2 == 1:
+        if rng.random() < section_slider_probability and emitted % 2 == 1:
             max_safe_length = max(
                 0.0,
                 ((object_interval_ms - 24) / beat_length) * (float(beatmap_ir.difficulty_settings["SliderMultiplier"]) * 100.0),
             )
-            proposed_length = float(max(120, min(260, spacing * 1.2)))
+            proposed_length = float(max(120, min(260, section_spacing * 1.2)))
             if max_safe_length >= 80:
                 proposed_length = min(proposed_length, max_safe_length)
             else:
                 proposed_length = 0.0
             if proposed_length > 0:
                 object_type = "slider"
-                anchor = int(clamp(x + direction * max(40, spacing // 2), 32, 480))
+                anchor = int(clamp(x + direction * max(40, section_spacing // 2), 32, 480))
                 curve = [(anchor, y), (anchor, int(clamp(y + 40, 32, 352)))]
                 length = proposed_length
                 end_ms = int(round(beat + (length / (float(beatmap_ir.difficulty_settings["SliderMultiplier"]) * 100.0)) * beat_length))
@@ -326,6 +388,7 @@ def arrange_objects(
                 curve=curve,
                 repeats=1,
                 length=length,
+                hitsounds=_hitsound_for_object(beat, beat_length, object_type, str(section["label"]), emitted),
                 semantic_role=f"generated:{section['label']}",
             )
         )
@@ -466,6 +529,11 @@ def generate_map(
     write_ir_json(beatmap, ir_path)
     package_osz(osu_path, osz_path, asset_paths=[analysis.path])
     final_score = score_map(osu_path)
+    hitsound_summary = {
+        "whistle": sum(1 for item in beatmap.objects if item.hitsounds & 2),
+        "finish": sum(1 for item in beatmap.objects if item.hitsounds & 4),
+        "clap": sum(1 for item in beatmap.objects if item.hitsounds & 8),
+    }
     return {
         "osu": str(osu_path),
         "osz": str(osz_path),
@@ -476,5 +544,6 @@ def generate_map(
         "pattern_count": len(pattern_bank),
         "tuning_history": tuning_history,
         "final_score": final_score,
+        "hitsound_summary": hitsound_summary,
         "validation_issues": [dataclass_to_dict(issue) for issue in beatmap.validation_report],
     }
