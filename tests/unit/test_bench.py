@@ -1,8 +1,9 @@
 import struct
 import wave
+import json
 from pathlib import Path
 
-from osu_lab.eval.bench import benchmark_style_control, benchmark_summary
+from osu_lab.eval.bench import benchmark_audio_tracking, benchmark_style_control, benchmark_summary
 
 
 def _write_click_track(path: Path, bpm: float = 150.0, seconds: int = 4, sample_rate: int = 44100) -> None:
@@ -38,3 +39,27 @@ def test_benchmark_style_control_reports_match_rates(tmp_path: Path):
     assert "styled_match_rate" in result
     assert len(result["results"]) == 2
     assert "mean_reference_improvement_ratio" in result
+
+
+def test_benchmark_audio_tracking_reads_manifest(tmp_path: Path):
+    audio = tmp_path / "bench.wav"
+    _write_click_track(audio, bpm=120.0)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "audio_path": str(audio),
+                        "expected_bpm": 120.0,
+                        "expected_beats_ms": [500, 1000, 1500, 2000],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = benchmark_audio_tracking(manifest)
+    assert result["case_count"] == 1
+    assert result["median_bpm_abs_error"] < 1.0
+    assert result["median_beat_timing_error_ms"] < 35.0

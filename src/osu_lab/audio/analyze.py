@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import wave
 from array import array
+from statistics import median
 from pathlib import Path
 
 from osu_lab.core.models import AudioAnalysis, Segment
@@ -80,6 +81,22 @@ def _peak_pick(values: list[float], threshold: float) -> list[int]:
     return peaks
 
 
+def _regularize_beats(peaks: list[int], hop: int, sample_rate: int, window: int, beat_period_ms: int, duration_ms: int) -> list[int]:
+    if not peaks:
+        return []
+    window_ms = window * 1000.0 / sample_rate
+    peak_times = [int(round(index * hop * 1000.0 / sample_rate + window_ms)) for index in peaks]
+    if len(peak_times) < 4:
+        return peak_times
+    phase = int(round(median([time_ms % beat_period_ms for time_ms in peak_times])))
+    start = phase
+    while start < peak_times[0] - beat_period_ms / 2:
+        start += beat_period_ms
+    while start - beat_period_ms >= 0 and abs((start - beat_period_ms) - peak_times[0]) <= abs(start - peak_times[0]):
+        start -= beat_period_ms
+    return list(range(start, duration_ms, beat_period_ms))
+
+
 def analyze_audio(path: str | Path, normalize: bool = True, output_dir: str | Path | None = None) -> AudioAnalysis:
     source = Path(path)
     wav_path = normalize_to_wav(source, output_dir=output_dir) if normalize else source
@@ -136,7 +153,7 @@ def analyze_audio(path: str | Path, normalize: bool = True, output_dir: str | Pa
     threshold = max(0.2, sum(onset) / max(1, len(onset)) * 1.5)
     peaks = _peak_pick(onset, threshold=threshold)
     beat_period_ms = int(round(60000.0 / bpm)) if bpm else 500
-    beats_ms = [int(round(index * hop * 1000 / sample_rate)) for index in peaks]
+    beats_ms = _regularize_beats(peaks, hop=hop, sample_rate=sample_rate, window=window, beat_period_ms=beat_period_ms, duration_ms=duration_ms)
     if not beats_ms:
         beats_ms = list(range(0, duration_ms, beat_period_ms))
     downbeats_ms = beats_ms[::4]

@@ -1,3 +1,4 @@
+import json
 import struct
 import wave
 from pathlib import Path
@@ -36,10 +37,26 @@ def _fixture_corpus(root: Path, count: int = 50) -> Path:
 def test_run_acceptance_reports_roundtrip_and_generation(tmp_path: Path):
     fixtures = _fixture_corpus(tmp_path / "fixtures")
     audio = tmp_path / "song.wav"
-    _write_click_track(audio)
+    _write_click_track(audio, bpm=120.0)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "audio_path": str(audio),
+                        "expected_bpm": 120.0,
+                        "expected_beats_ms": [500, 1000, 1500, 2000],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
     report = run_acceptance(
         fixtures_dir=fixtures,
         audio_path=audio,
+        audio_manifest=manifest,
         output_dir=tmp_path / "out",
         prompts=["jump", "flow aim"],
         reference_maps=["tests/fixtures/sample_map.osu"],
@@ -48,5 +65,6 @@ def test_run_acceptance_reports_roundtrip_and_generation(tmp_path: Path):
     )
     assert report["roundtrip"]["map_count"] >= 50
     assert report["replay"]["deterministic_rate"] == 1.0
+    assert report["audio"]["median_bpm_abs_error"] < 1.0
     assert "style_control" in report
     assert "generation" in report

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 
+from osu_lab.audio.analyze import analyze_audio
 from osu_lab.generate.mapforge import generate_map
 from osu_lab.integration.scoring import score_map
 from osu_lab.style.profile import build_style_profile, classify_map, style_distance
@@ -30,6 +32,66 @@ def benchmark_summary(fixtures_dir: str | Path) -> dict[str, object]:
         "maps": per_map,
         "status": "ok" if fixtures else "empty",
     }
+
+
+def _median(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2.0
+
+
+def _nearest_beat_error(expected_beats: list[int], observed_beats: list[int]) -> float:
+    if not expected_beats or not observed_beats:
+        return 0.0
+    errors = []
+    for beat in expected_beats:
+        errors.append(min(abs(beat - observed) for observed in observed_beats))
+    return _median(errors)
+
+
+def benchmark_audio_tracking(manifest_path: str | Path) -> dict[str, object]:
+    payload = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    cases = payload.get("cases", payload) if isinstance(payload, dict) else payload
+    results = []
+    bpm_errors = []
+    beat_errors = []
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        path = case["audio_path"]
+        analysis = analyze_audio(path)
+        expected_bpm = float(case["expected_bpm"])
+        bpm_error = abs(analysis.bpm - expected_bpm)
+        expected_beats = [int(value) for value in case.get("expected_beats_ms", [])]
+        beat_error = _nearest_beat_error(expected_beats, analysis.beats_ms)
+        bpm_errors.append(bpm_error)
+        if expected_beats:
+            beat_errors.append(beat_error)
+        results.append(
+            {
+                "audio_path": str(path),
+                "backend": analysis.backend,
+                "expected_bpm": expected_bpm,
+                "observed_bpm": analysis.bpm,
+                "bpm_abs_error": bpm_error,
+                "median_beat_error_ms": beat_error,
+                "beat_count": len(analysis.beats_ms),
+            }
+        )
+    report = {
+        "manifest_path": str(manifest_path),
+        "case_count": len(results),
+        "median_bpm_abs_error": _median(bpm_errors),
+        "results": results,
+        "status": "ok" if results else "empty",
+    }
+    if beat_errors:
+        report["median_beat_timing_error_ms"] = _median(beat_errors)
+    return report
 
 
 def _expected_class(prompt: str) -> str:

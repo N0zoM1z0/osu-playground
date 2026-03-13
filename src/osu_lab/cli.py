@@ -12,7 +12,7 @@ from osu_lab.core.schema import schema_bundle
 from osu_lab.core.models import StyleProfile
 from osu_lab.core.utils import dataclass_to_dict, json_dump, json_print
 from osu_lab.eval.acceptance import run_acceptance
-from osu_lab.eval.bench import benchmark_summary
+from osu_lab.eval.bench import benchmark_audio_tracking, benchmark_summary
 from osu_lab.generate.mapforge import generate_map
 from osu_lab.integration.scoring import score_map
 from osu_lab.live.planner import arm_live_plan, plan_live_play
@@ -111,6 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
     bench = subparsers.add_parser("bench")
     bench.add_argument("fixtures_dir", nargs="?")
     bench.add_argument("--audio")
+    bench.add_argument("--audio-manifest")
     bench.add_argument("--out-dir")
     bench.add_argument("--prompt", action="append", default=[])
     bench.add_argument("--reference-map", action="append", default=[])
@@ -294,6 +295,7 @@ def main(argv: list[str] | None = None) -> int:
                 run_acceptance(
                     fixtures_dir=args.fixtures_dir,
                     audio_path=args.audio,
+                    audio_manifest=args.audio_manifest,
                     output_dir=args.out_dir,
                     prompts=args.prompt,
                     reference_maps=args.reference_map,
@@ -304,6 +306,9 @@ def main(argv: list[str] | None = None) -> int:
                     min_fixture_count=args.min_fixture_count,
                 )
             )
+            return 0
+        if args.audio_manifest:
+            json_print(benchmark_audio_tracking(args.audio_manifest))
             return 0
         if args.audio:
             json_print(

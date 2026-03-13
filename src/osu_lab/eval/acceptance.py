@@ -6,7 +6,7 @@ from pathlib import Path
 from osu_lab.beatmap.io import compile_osu, parse_osu
 from osu_lab.beatmap.validate import verify_beatmap
 from osu_lab.beatmap.verify_external import run_external_verifier
-from osu_lab.eval.bench import benchmark_style_control
+from osu_lab.eval.bench import benchmark_audio_tracking, benchmark_style_control
 from osu_lab.generate.mapforge import generate_map
 from osu_lab.replay.synth import inspect_replay, synthesize_replay_plan, write_replay
 
@@ -167,6 +167,7 @@ def generation_acceptance(
 def run_acceptance(
     fixtures_dir: str | Path,
     audio_path: str | Path | None = None,
+    audio_manifest: str | Path | None = None,
     output_dir: str | Path | None = None,
     prompts: list[str] | None = None,
     reference_maps: list[str | Path] | None = None,
@@ -181,6 +182,8 @@ def run_acceptance(
         "roundtrip": roundtrip_acceptance(fixtures_dir, min_fixture_count=min_fixture_count),
         "replay": replay_acceptance(fixtures_dir, seed=seed),
     }
+    if audio_manifest:
+        report["audio"] = benchmark_audio_tracking(audio_manifest)
     if audio_path and output_dir:
         report["generation"] = generation_acceptance(
             audio_path=audio_path,

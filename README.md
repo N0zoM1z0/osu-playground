@@ -109,6 +109,12 @@ Run the aggregated acceptance harness:
 osu-lab bench /path/to/fixtures --acceptance --audio /path/to/song.wav --out-dir /tmp/acceptance --prompt jump --prompt stream
 ```
 
+Benchmark audio timing against a manifest with ground truth BPM/beat labels:
+
+```bash
+osu-lab bench --audio-manifest /path/to/audio-benchmark.json
+```
+
 Score a map with `rosu-pp-py`:
 
 ```bash
@@ -174,6 +180,7 @@ docs/
 - generated maps now include rule-based hitsound assignment and stronger section-level arrangement differences such as chorus emphasis and break-safe spinner opportunities.
 - `style profile` and `map generate` now emit a human-readable style report alongside raw metrics.
 - `bench --acceptance` aggregates round-trip stability, replay determinism, generated-map validity, difficulty targeting, and style controllability in one JSON report.
+- `bench --audio-manifest` evaluates BPM and beat-timing error from a user-supplied benchmark manifest.
 
 ## Docs
 

@@ -24,6 +24,7 @@ The main rule is that agent-facing tools operate on structured objects, not on r
 - `integration`: scoring and agent-callable tool wrappers
 - `eval`: benchmark placeholders and acceptance harness entry points
 - `eval.acceptance`: round-trip, replay, generation, and style-control acceptance aggregation
+- `eval.bench`: corpus summaries plus manifest-driven audio timing benchmarks
 
 ## Data Flow
 
