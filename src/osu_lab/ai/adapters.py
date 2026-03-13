@@ -111,6 +111,7 @@ def draft_with_backend(
     seed: int = 1,
     target_star: float | None = None,
     target_pp: float | None = None,
+    reference_maps: list[str | Path] | None = None,
 ) -> dict[str, object]:
     backend_key = backend.lower()
     source = Path(audio_path)
@@ -138,6 +139,7 @@ def draft_with_backend(
         target_star=target_star,
         target_pp=target_pp,
         ai_recipe=draft,
+        reference_maps=reference_maps,
     )
     return {
         "status": "ok",

@@ -13,6 +13,7 @@ from osu_lab.generate.mapforge import arrange_objects, draft_skeleton
 from osu_lab.integration.scoring import score_map
 from osu_lab.live.planner import plan_live_play
 from osu_lab.replay.synth import synthesize_replay_plan
+from osu_lab.style.corpus import build_style_index
 from osu_lab.style.profile import build_style_profile, classify_map
 
 
@@ -22,6 +23,10 @@ def analyze_audio_tool(path: str) -> dict[str, object]:
 
 def build_style_profile_tool(ref_maps: list[str]) -> dict[str, object]:
     return dataclass_to_dict(build_style_profile(ref_maps))
+
+
+def build_style_index_tool(paths: list[str]) -> dict[str, object]:
+    return build_style_index(paths)
 
 
 def draft_skeleton_tool(audio_analysis_path: str, style_tags: list[str]) -> dict[str, object]:

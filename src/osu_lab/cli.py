@@ -15,6 +15,7 @@ from osu_lab.generate.mapforge import generate_map
 from osu_lab.integration.scoring import score_map
 from osu_lab.live.planner import arm_live_plan, plan_live_play
 from osu_lab.replay.synth import dump_replay_plan, inspect_replay, write_replay
+from osu_lab.style.corpus import build_style_index, load_style_index
 from osu_lab.style.profile import build_style_profile, classify_map
 
 
@@ -68,6 +69,8 @@ def build_parser() -> argparse.ArgumentParser:
     map_generate.add_argument("--seed", type=int, default=1)
     map_generate.add_argument("--target-star", type=float)
     map_generate.add_argument("--target-pp", type=float)
+    map_generate.add_argument("--reference-map", action="append", default=[])
+    map_generate.add_argument("--style-index")
     map_verify = map_sub.add_parser("verify")
     map_verify.add_argument("path")
     map_verify.add_argument("--external-command")
@@ -79,7 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     style = subparsers.add_parser("style")
     style_sub = style.add_subparsers(dest="style_command", required=True)
     style_index = style_sub.add_parser("build-index")
-    style_index.add_argument("path")
+    style_index.add_argument("paths", nargs="+")
     style_index.add_argument("--out", required=True)
     style_profile_cmd = style_sub.add_parser("profile")
     style_profile_cmd.add_argument("maps", nargs="+")
@@ -94,6 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
     ai_draft.add_argument("--seed", type=int, default=1)
     ai_draft.add_argument("--target-star", type=float)
     ai_draft.add_argument("--target-pp", type=float)
+    ai_draft.add_argument("--reference-map", action="append", default=[])
 
     schema = subparsers.add_parser("schema")
     schema_sub = schema.add_subparsers(dest="schema_command", required=True)
@@ -114,6 +118,16 @@ def _verify_path(path: Path, external_command: str | None = None) -> dict[str, o
         "issues": [dataclass_to_dict(issue) for issue in issues],
         "external": run_external_verifier(path, command=external_command),
     }
+
+
+def _profile_from_style_index(path: str | Path | None):
+    if not path:
+        return None
+    index = load_style_index(path)
+    aggregate = index.get("aggregate")
+    if not isinstance(aggregate, dict):
+        return None
+    return build_style_profile(aggregate.get("source_maps", []))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -180,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
                 seed=args.seed,
                 target_star=args.target_star,
                 target_pp=args.target_pp,
+                profile=_profile_from_style_index(args.style_index),
+                reference_maps=args.reference_map,
             )
         )
         return 0
@@ -198,11 +214,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "style" and args.style_command == "build-index":
-        root = Path(args.path)
-        maps = [str(path) for path in sorted(root.rglob("*.osu"))]
-        profile = build_style_profile(maps)
-        json_dump(profile, Path(args.out))
-        json_print(profile)
+        index = build_style_index(args.paths)
+        json_dump(index, Path(args.out))
+        json_print(index)
         return 0
 
     if args.command == "style" and args.style_command == "profile":
@@ -220,6 +234,7 @@ def main(argv: list[str] | None = None) -> int:
                 seed=args.seed,
                 target_star=args.target_star,
                 target_pp=args.target_pp,
+                reference_maps=args.reference_map,
             )
         )
         return 0
