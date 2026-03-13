@@ -99,6 +99,8 @@ def build_parser() -> argparse.ArgumentParser:
     ai_draft.add_argument("--target-star", type=float)
     ai_draft.add_argument("--target-pp", type=float)
     ai_draft.add_argument("--reference-map", action="append", default=[])
+    ai_draft.add_argument("--style-index")
+    ai_draft.add_argument("--dotenv-path")
 
     schema = subparsers.add_parser("schema")
     schema_sub = schema.add_subparsers(dest="schema_command", required=True)
@@ -242,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "ai" and args.ai_command == "draft":
+        style_profile, style_index = _style_index_bundle(args.style_index)
         json_print(
             draft_with_backend(
                 args.backend,
@@ -252,6 +255,8 @@ def main(argv: list[str] | None = None) -> int:
                 target_star=args.target_star,
                 target_pp=args.target_pp,
                 reference_maps=args.reference_map,
+                style_index=style_index,
+                dotenv_path=args.dotenv_path,
             )
         )
         return 0

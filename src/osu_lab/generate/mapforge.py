@@ -12,7 +12,7 @@ from osu_lab.core.models import AudioAnalysis, BeatmapIR, HitObjectIR, Segment, 
 from osu_lab.core.utils import clamp, dataclass_to_dict
 from osu_lab.integration.scoring import score_map
 from osu_lab.style.patterns import extract_pattern_bank, select_patterns
-from osu_lab.style.profile import build_style_profile
+from osu_lab.style.profile import build_style_profile, build_style_profile as _build_style_profile_single, style_distance
 from osu_lab.style.prompt import parse_style_prompt
 
 
@@ -409,6 +409,14 @@ def _estimate_map_stats(beatmap: BeatmapIR) -> dict[str, float]:
     return {"stars": float(score["stars"]), "pp": float(score["pp"])}
 
 
+def _estimate_style_distance(beatmap: BeatmapIR, reference_profile: StyleProfile) -> float:
+    with tempfile.TemporaryDirectory(prefix="osu-lab-style-") as tmpdir:
+        temp_path = Path(tmpdir) / "candidate.osu"
+        write_osu(beatmap, temp_path)
+        candidate_profile = _build_style_profile_single([temp_path])
+    return style_distance(candidate_profile, reference_profile)
+
+
 def _tune_map(
     beatmap: BeatmapIR,
     audio_analysis: AudioAnalysis,
@@ -424,6 +432,7 @@ def _tune_map(
     history: list[dict[str, float]] = []
     best_map = None
     best_error = float("inf")
+    reference_style_error_weight = 0.35 if style_profile and style_target.reference_maps else 0.0
 
     for _ in range(5):
         candidate = arrange_objects(
@@ -442,7 +451,8 @@ def _tune_map(
         pp_target = style_target.target_pp
         star_error = abs(stats["stars"] - star_target) if star_target is not None else 0.0
         pp_error = abs(stats["pp"] - pp_target) / max(1.0, pp_target or 1.0) if pp_target is not None else 0.0
-        error = star_error + pp_error
+        style_error = _estimate_style_distance(candidate, style_profile) if style_profile and style_target.reference_maps else 0.0
+        error = star_error + pp_error + style_error * reference_style_error_weight
         history.append(
             {
                 "spacing_scale": spacing_scale,
@@ -450,6 +460,7 @@ def _tune_map(
                 "slider_ratio_bias": slider_ratio_bias,
                 "stars": stats["stars"],
                 "pp": stats["pp"],
+                "style_distance": style_error,
                 "error": error,
             }
         )
