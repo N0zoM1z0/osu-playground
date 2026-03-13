@@ -53,6 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     live_plan.add_argument("--cache-dir")
     live_plan.add_argument("--width", type=int, default=1280)
     live_plan.add_argument("--height", type=int, default=960)
+    live_plan.add_argument("--window-auto", action="store_true")
     live_arm = live_sub.add_parser("arm")
     live_arm.add_argument("map", nargs="?", default="")
     live_arm.add_argument("--profile", default="auto_perfect")
@@ -61,6 +62,8 @@ def build_parser() -> argparse.ArgumentParser:
     live_arm.add_argument("--cache-dir")
     live_arm.add_argument("--inject", action="store_true")
     live_arm.add_argument("--lead-in-ms", type=int, default=1000)
+    live_arm.add_argument("--window-auto", action="store_true")
+    live_arm.add_argument("--stop-file")
 
     map_parser = subparsers.add_parser("map")
     map_sub = map_parser.add_subparsers(dest="map_command", required=True)
@@ -188,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
                 provider=args.provider,
                 client_width=args.width,
                 client_height=args.height,
+                window_auto=args.window_auto,
                 tosu_base_url=args.tosu_base_url,
                 cache_dir=args.cache_dir,
             )
@@ -203,13 +207,14 @@ def main(argv: list[str] | None = None) -> int:
                 args.map,
                 profile=args.profile,
                 provider=args.provider,
+                window_auto=args.window_auto,
                 tosu_base_url=args.tosu_base_url,
                 cache_dir=args.cache_dir,
             )
         except Exception as exc:
             json_print({"status": "error", "provider": args.provider, "message": str(exc)})
             return 1
-        json_print(arm_live_plan(plan, dry_run=not args.inject, lead_in_ms=args.lead_in_ms))
+        json_print(arm_live_plan(plan, dry_run=not args.inject, lead_in_ms=args.lead_in_ms, stop_file=args.stop_file))
         return 0
 
     if args.command == "map" and args.map_command == "generate":

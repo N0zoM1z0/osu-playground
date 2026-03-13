@@ -81,6 +81,7 @@ Plan from a running `tosu` instance:
 
 ```bash
 osu-lab live plan --provider tosu --tosu-base-url http://127.0.0.1:24050
+osu-lab live plan --window-auto tests/fixtures/sample_map.osu
 ```
 
 Draft with an external AI CLI:
@@ -169,7 +170,9 @@ docs/
 - Audio analysis normalizes non-WAV input via `ffmpeg` when available.
 - `allin1` is optional; a fallback analyzer is included for lightweight local use.
 - `live plan --provider tosu` fetches the current beatmap file from `tosu` and converts replay frames into client-space events.
+- `live plan --window-auto` can capture the active osu! client rect on Windows and map the 512x384 playfield into that client-space rect.
 - `live arm --inject` only executes on Windows and uses `SendInput`, which is subject to UIPI.
+- `live arm --stop-file /tmp/osu-lab.stop` adds a simple file-based emergency stop that can abort an armed run without changing code.
 - `ai draft` uses non-interactive `claude` or `droid` CLIs to produce a structured recipe, then normalizes that recipe back into the local generator.
 - `ai draft kimi` uses Moonshot's international OpenAI-compatible endpoint at `https://api.moonshot.ai/v1`; this is distinct from the `.cn` platform.
 - file-producing backends can be enabled with `OSU_LAB_<BACKEND>_ROOT` or `OSU_LAB_<BACKEND>_COMMAND_TEMPLATE`; successful drafts are re-profiled and fed back through the local post-processing pipeline.

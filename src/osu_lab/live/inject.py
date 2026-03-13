@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import time
 from ctypes import wintypes
+from pathlib import Path
 
 from osu_lab.core.models import LivePlan
 
@@ -54,22 +55,31 @@ def _send_mouse(x: float, y: float) -> None:
     absolute_x = int(x * 65535 / max(1, screen_w))
     absolute_y = int(y * 65535 / max(1, screen_h))
     event = INPUT(type=INPUT_MOUSE, mi=MOUSEINPUT(absolute_x, absolute_y, 0, MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, 0, None))
-    user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(INPUT))
+    if user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(INPUT)) != 1:
+        raise RuntimeError("SendInput mouse injection failed; this is commonly caused by incompatible integrity levels (UIPI)")
 
 
 def _send_key(vk_code: int, down: bool) -> None:
     user32 = ctypes.windll.user32
     flags = 0 if down else KEYEVENTF_KEYUP
     event = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(vk_code, 0, flags, 0, None))
-    user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(INPUT))
+    if user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(INPUT)) != 1:
+        raise RuntimeError("SendInput keyboard injection failed; this is commonly caused by incompatible integrity levels (UIPI)")
 
 
-def execute_live_plan(plan: LivePlan, lead_in_ms: int = 1000) -> dict[str, object]:
+def execute_live_plan(plan: LivePlan, lead_in_ms: int = 1000, stop_file: str | Path | None = None) -> dict[str, object]:
     active_keys = 0
     start = time.perf_counter() + lead_in_ms / 1000.0
+    stop_path = Path(stop_file) if stop_file else None
     for event in plan.events:
+        if stop_path and stop_path.exists():
+            break
         while time.perf_counter() < start + event.at_ms / 1000.0:
+            if stop_path and stop_path.exists():
+                break
             time.sleep(0.001)
+        if stop_path and stop_path.exists():
+            break
         if event.x is not None and event.y is not None:
             _send_mouse(event.x, event.y)
         if event.keys is not None:
@@ -85,8 +95,9 @@ def execute_live_plan(plan: LivePlan, lead_in_ms: int = 1000) -> dict[str, objec
         if active_keys & mask:
             _send_key(vk, False)
     return {
-        "status": "injected",
+        "status": "aborted" if stop_path and stop_path.exists() else "injected",
         "event_count": len(plan.events),
         "lead_in_ms": lead_in_ms,
+        "stop_file": str(stop_path) if stop_path else None,
         "warning": "SendInput is subject to UIPI; osu! and the injector must run at compatible integrity levels",
     }

@@ -125,6 +125,8 @@ Execution:
 
 - dry-run on any platform
 - `SendInput` injection on Windows only, with an explicit UIPI warning
+- optional active-window client-rect capture for automatic playfield mapping
+- optional file-based emergency stop for long armed runs
 
 ### AI
 
