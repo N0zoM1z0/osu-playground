@@ -20,7 +20,7 @@ The current implementation provides a working v0.1 foundation:
 - deterministic `.osr` synthesis using `osrparse`
 - fallback WAV audio analysis plus optional `allin1`
 - iterative rule-based generator for prompts such as `flow aim`, `jump`, `farm jump`, `stream`, `deathstream`
-- style profiling and map classification heuristics
+- style profiling, local corpus indexing, and map classification heuristics
 - `tosu`-compatible live planning via current-beatmap file fetch
 - Windows `SendInput` execution path for explicit live injection runs
 - external verifier hook for `MapsetVerifier` or a custom command
@@ -67,6 +67,13 @@ Generate with star targeting and inspect verifier output:
 ```bash
 osu-lab map generate /path/to/song.wav --out-dir /tmp/out --prompt "jump" --target-star 5.2
 osu-lab map verify /tmp/out/example.osu --external-command "MapsetVerifier {path}"
+```
+
+Build a local reference corpus and generate against it:
+
+```bash
+osu-lab style build-index /path/to/reference-pack --out /tmp/style-index.json
+osu-lab map generate /path/to/song.wav --out-dir /tmp/out --prompt "flow aim" --style-index /tmp/style-index.json --reference-map /path/to/reference-pack/map.osu
 ```
 
 Plan from a running `tosu` instance:
@@ -138,6 +145,8 @@ docs/
 - `live plan --provider tosu` fetches the current beatmap file from `tosu` and converts replay frames into client-space events.
 - `live arm --inject` only executes on Windows and uses `SendInput`, which is subject to UIPI.
 - `ai draft` uses non-interactive `claude` or `droid` CLIs to produce a structured recipe, then normalizes that recipe back into the local generator.
+- `style build-index` is the intended way to learn from a user-supplied local corpus without bundling third-party beatmaps into the repository.
+- `map generate` can consume both `--reference-map` inputs and a prebuilt `--style-index`, and now emits a section density plan in the resulting `style_target`.
 
 ## Docs
 

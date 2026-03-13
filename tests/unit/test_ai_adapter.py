@@ -23,8 +23,8 @@ def test_claude_adapter_normalizes_recipe(monkeypatch, tmp_path: Path):
             stderr="",
         )
 
-    def _fake_generate_map(audio_path, output_dir, prompt, seed=1, target_star=None, target_pp=None, ai_recipe=None):
-        return {"osu": str(Path(output_dir) / "a.osu"), "ai_recipe": ai_recipe, "prompt": prompt}
+    def _fake_generate_map(audio_path, output_dir, prompt, seed=1, target_star=None, target_pp=None, ai_recipe=None, reference_maps=None):
+        return {"osu": str(Path(output_dir) / "a.osu"), "ai_recipe": ai_recipe, "prompt": prompt, "reference_maps": reference_maps}
 
     monkeypatch.setattr("osu_lab.ai.adapters.analyze_audio", _fake_analyze)
     monkeypatch.setattr("osu_lab.ai.adapters._run_claude", lambda prompt: _fake_run([], text=True))
@@ -32,4 +32,3 @@ def test_claude_adapter_normalizes_recipe(monkeypatch, tmp_path: Path):
     result = draft_with_backend("claude", wav_path, output_path=tmp_path, prompt="flow aim")
     assert result["status"] == "ok"
     assert "jump" in result["generation"]["prompt"]
-

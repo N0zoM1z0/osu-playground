@@ -22,7 +22,8 @@
   "generation": {
     "prompt": "mixed",
     "target_star": 5.0,
-    "target_pp": 220.0
+    "target_pp": 220.0,
+    "style_index": "D:/osu/style-index.json"
   },
   "ai": {
     "backend": "claude",
@@ -32,6 +33,9 @@
   "style": {
     "reference_roots": [
       "D:/osu/Songs/ReferencePack"
+    ],
+    "preferred_reference_maps": [
+      "D:/osu/Songs/ReferencePack/Example/Example [Insane].osu"
     ]
   }
 }

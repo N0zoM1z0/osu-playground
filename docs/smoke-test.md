@@ -97,4 +97,5 @@
 
 1. Build a local index over a folder of reference maps.
 2. Inspect the profile output.
-3. Confirm that jump-heavy, stream-heavy, and flow-heavy folders produce meaningfully different histograms and class scores.
+3. Generate a map using `--style-index` and `--reference-map`.
+4. Confirm that jump-heavy, stream-heavy, and flow-heavy folders produce meaningfully different histograms, section density plans, and class scores.

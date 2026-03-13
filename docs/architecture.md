@@ -18,7 +18,7 @@ The main rule is that agent-facing tools operate on structured objects, not on r
 - `replay`: deterministic replay planning and `.osr` writing
 - `live`: replay-to-live event planning, `tosu` provider fetch, Windows injection
 - `audio`: WAV normalization and beat/segment analysis
-- `style`: spacing, angle, density, and heuristic classification profiles
+- `style`: spacing, angle, density, corpus indexing, and heuristic classification profiles
 - `generate`: rule-based skeleton drafting and object arrangement
 - `ai`: optional external CLI adapters with structured recipe normalization
 - `integration`: scoring and agent-callable tool wrappers
@@ -86,6 +86,25 @@ The tuning loop adjusts:
 - slider ratio bias
 
 and keeps the best candidate against requested star and pp targets.
+
+The generator is now section-aware:
+
+- it derives a section density plan from audio segments
+- it can blend in density tendencies from a local reference corpus
+- it can consume explicit reference maps supplied by the user at generation time
+
+### Style Corpus
+
+local `.osu` folders -> per-map profiles -> aggregate style index
+
+The repository does not ship third-party beatmaps. Instead, the workflow expects user-supplied local folders and builds:
+
+- per-map style metrics
+- aggregate histograms
+- section density curves
+- heuristic class signals
+
+This keeps the project local-only while still enabling prompt and reference driven generation.
 
 ### Live
 
