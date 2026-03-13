@@ -26,9 +26,10 @@
     "style_index": "D:/osu/style-index.json"
   },
   "ai": {
-    "backend": "claude",
+    "backend": "kimi",
     "prompt": "flow aim,jump",
-    "seed": 1
+    "seed": 1,
+    "dotenv_path": ".env"
   },
   "style": {
     "reference_roots": [

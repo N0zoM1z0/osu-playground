@@ -24,7 +24,7 @@ The current implementation provides a working v0.1 foundation:
 - `tosu`-compatible live planning via current-beatmap file fetch
 - Windows `SendInput` execution path for explicit live injection runs
 - external verifier hook for `MapsetVerifier` or a custom command
-- non-interactive AI draft adapters for `claude` and `droid`
+- non-interactive AI draft adapters for `claude`, `droid`, and native `kimi`
 - `rosu-pp-py` based map scoring
 - JSON-first CLI and automated tests
 
@@ -89,6 +89,12 @@ osu-lab ai draft claude /path/to/song.wav --prompt "flow aim,jump" --target-star
 osu-lab ai draft droid /path/to/song.wav --prompt "stream"
 ```
 
+Draft with native Kimi international API:
+
+```bash
+osu-lab ai draft kimi /path/to/song.wav --prompt "jump,flow aim" --dotenv-path .env
+```
+
 Score a map with `rosu-pp-py`:
 
 ```bash
@@ -145,6 +151,7 @@ docs/
 - `live plan --provider tosu` fetches the current beatmap file from `tosu` and converts replay frames into client-space events.
 - `live arm --inject` only executes on Windows and uses `SendInput`, which is subject to UIPI.
 - `ai draft` uses non-interactive `claude` or `droid` CLIs to produce a structured recipe, then normalizes that recipe back into the local generator.
+- `ai draft kimi` uses Moonshot's international OpenAI-compatible endpoint at `https://api.moonshot.ai/v1`; this is distinct from the `.cn` platform.
 - `style build-index` is the intended way to learn from a user-supplied local corpus without bundling third-party beatmaps into the repository.
 - `map generate` can consume both `--reference-map` inputs and a prebuilt `--style-index`, and now emits a section density plan in the resulting `style_target`.
 - `style build-index` now stores a lightweight pattern bank, and `map generate` can stamp retrieved reference patterns into the arranged output instead of relying only on global histogram bias.

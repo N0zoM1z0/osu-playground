@@ -124,14 +124,24 @@ Execution:
 
 ### AI
 
-audio + analysis summary -> external non-interactive AI CLI -> structured recipe -> local generator
+audio + analysis summary -> external AI backend -> structured recipe -> local generator
 
 Supported adapters:
 
 - `claude`
 - `droid`
+- `kimi`
+- `kimi-thinking`
 
 The AI output is constrained to a small JSON recipe and never writes raw `.osu` text directly.
+
+For Kimi, the implementation targets Moonshot's international OpenAI-compatible API:
+
+- base URL: `https://api.moonshot.ai/v1`
+- recommended general model: `kimi-k2.5`
+- dedicated reasoning model: `kimi-k2-thinking`
+
+The adapter normalizes freer Kimi responses back into the repository's internal recipe schema before generation.
 
 ## Agent Boundary
 
