@@ -20,3 +20,4 @@ def test_schema_dump_cli():
 def test_map_verify_cli():
     payload = _run_cli("map", "verify", "tests/fixtures/sample_map.osu")
     assert payload["issue_count"] == 0
+    assert "external" in payload

@@ -16,11 +16,11 @@ The main rule is that agent-facing tools operate on structured objects, not on r
 - `core`: shared dataclasses, schema bundle, JSON helpers
 - `beatmap`: `.osu` parsing, compilation, `.osz` packaging, validation
 - `replay`: deterministic replay planning and `.osr` writing
-- `live`: replay-to-live event planning, dry-run arming
+- `live`: replay-to-live event planning, `tosu` provider fetch, Windows injection
 - `audio`: WAV normalization and beat/segment analysis
 - `style`: spacing, angle, density, and heuristic classification profiles
 - `generate`: rule-based skeleton drafting and object arrangement
-- `ai`: optional backend adapters with explicit local-failure reporting
+- `ai`: optional external CLI adapters with structured recipe normalization
 - `integration`: scoring and agent-callable tool wrappers
 - `eval`: benchmark placeholders and acceptance harness entry points
 
@@ -70,7 +70,7 @@ Fallback backend:
 
 `AudioAnalysis` + `StyleTarget` -> draft timing grid -> arranged `BeatmapIR`
 
-The current generator is intentionally simple and deterministic. It maps prompt tags into spacing, density, and path heuristics:
+The current generator is deterministic and target-aware. It maps prompt tags into spacing, density, and path heuristics, then runs a short local tuning loop against `rosu-pp-py`:
 
 - `flow aim`: arc-like movement and occasional sliders
 - `jump`: large spacing with simpler rhythms
@@ -78,6 +78,39 @@ The current generator is intentionally simple and deterministic. It maps prompt 
 - `stream`: dense lower-spacing streams
 - `deathstream`: even denser stream layout
 - `mixed/control`: conservative baseline
+
+The tuning loop adjusts:
+
+- spacing scale
+- density scale
+- slider ratio bias
+
+and keeps the best candidate against requested star and pp targets.
+
+### Live
+
+`ReplayPlan` -> `LivePlan` -> optional Windows injection
+
+Providers:
+
+- `direct-file/manual`: read a local `.osu`
+- `tosu`: fetch the current beatmap file from the local `tosu` HTTP endpoint
+
+Execution:
+
+- dry-run on any platform
+- `SendInput` injection on Windows only, with an explicit UIPI warning
+
+### AI
+
+audio + analysis summary -> external non-interactive AI CLI -> structured recipe -> local generator
+
+Supported adapters:
+
+- `claude`
+- `droid`
+
+The AI output is constrained to a small JSON recipe and never writes raw `.osu` text directly.
 
 ## Agent Boundary
 

@@ -19,12 +19,16 @@ The current implementation provides a working v0.1 foundation:
 - `.osz` packaging
 - deterministic `.osr` synthesis using `osrparse`
 - fallback WAV audio analysis plus optional `allin1`
-- basic rule-based generator for prompts such as `flow aim`, `jump`, `farm jump`, `stream`, `deathstream`
+- iterative rule-based generator for prompts such as `flow aim`, `jump`, `farm jump`, `stream`, `deathstream`
 - style profiling and map classification heuristics
+- `tosu`-compatible live planning via current-beatmap file fetch
+- Windows `SendInput` execution path for explicit live injection runs
+- external verifier hook for `MapsetVerifier` or a custom command
+- non-interactive AI draft adapters for `claude` and `droid`
 - `rosu-pp-py` based map scoring
 - JSON-first CLI and automated tests
 
-Windows live injection is intentionally left in dry-run mode by default. Online score submission, multiplayer automation, anti-detection workflows, and client modification remain out of scope.
+Windows live injection remains dry-run-first by default. Online score submission, multiplayer automation, anti-detection workflows, and client modification remain out of scope.
 
 ## Quickstart
 
@@ -56,6 +60,26 @@ Generate a draft beatmap package:
 
 ```bash
 osu-lab map generate /path/to/song.wav --out-dir /tmp/out --prompt "flow aim,jump" --seed 7
+```
+
+Generate with star targeting and inspect verifier output:
+
+```bash
+osu-lab map generate /path/to/song.wav --out-dir /tmp/out --prompt "jump" --target-star 5.2
+osu-lab map verify /tmp/out/example.osu --external-command "MapsetVerifier {path}"
+```
+
+Plan from a running `tosu` instance:
+
+```bash
+osu-lab live plan --provider tosu --tosu-base-url http://127.0.0.1:24050
+```
+
+Draft with an external AI CLI:
+
+```bash
+osu-lab ai draft claude /path/to/song.wav --prompt "flow aim,jump" --target-star 5.5
+osu-lab ai draft droid /path/to/song.wav --prompt "stream"
 ```
 
 Score a map with `rosu-pp-py`:
@@ -111,6 +135,9 @@ docs/
 - Replay generation is deterministic under fixed seeds.
 - Audio analysis normalizes non-WAV input via `ffmpeg` when available.
 - `allin1` is optional; a fallback analyzer is included for lightweight local use.
+- `live plan --provider tosu` fetches the current beatmap file from `tosu` and converts replay frames into client-space events.
+- `live arm --inject` only executes on Windows and uses `SendInput`, which is subject to UIPI.
+- `ai draft` uses non-interactive `claude` or `droid` CLIs to produce a structured recipe, then normalizes that recipe back into the local generator.
 
 ## Docs
 

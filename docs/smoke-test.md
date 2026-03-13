@@ -31,6 +31,12 @@
    osu-lab live plan C:\\path\\to\\map.osu > C:\\temp\\live-plan.json
    ```
 
+   Or fetch from a running `tosu` instance:
+
+   ```bash
+   osu-lab live plan --provider tosu --tosu-base-url http://127.0.0.1:24050 > C:\\temp\\live-plan.json
+   ```
+
 2. Arm in dry-run mode:
 
    ```bash
@@ -42,6 +48,7 @@
 - event timings are plausible
 - mapped coordinates stay inside the osu! client rect
 - no input is injected unless `--inject` is explicitly requested in a Windows runtime
+- if `tosu` is used, the current beatmap file is fetched successfully
 
 ## Audio Analysis
 
@@ -69,7 +76,22 @@
 
 - `.osu`, `.osz`, and IR JSON are produced
 - `osu-lab map verify` reports no critical object-gap or bounds errors
+- optional external verifier output is captured when `MapsetVerifier` is configured
 - generated package opens as an unranked local experiment in osu!stable
+
+## AI Draft
+
+1. Run a non-interactive AI draft:
+
+   ```bash
+   osu-lab ai draft claude C:\\path\\to\\song.wav --prompt "jump,flow aim" --target-star 5.0
+   ```
+
+2. Confirm:
+
+- the AI backend returns a structured recipe, not raw `.osu` text
+- the generated map package is still produced by the local compiler
+- failures are explicit if the backend CLI is missing or unauthenticated
 
 ## Style
 
