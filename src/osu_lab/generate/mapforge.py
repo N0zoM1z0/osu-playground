@@ -11,6 +11,7 @@ from osu_lab.beatmap.validate import verify_beatmap
 from osu_lab.core.models import AudioAnalysis, BeatmapIR, HitObjectIR, Segment, StyleProfile, StyleTarget, TimingGrid, TimingPoint, default_metadata
 from osu_lab.core.utils import clamp, dataclass_to_dict
 from osu_lab.integration.scoring import score_map
+from osu_lab.style.patterns import extract_pattern_bank, select_patterns
 from osu_lab.style.profile import build_style_profile
 from osu_lab.style.prompt import parse_style_prompt
 
@@ -133,6 +134,56 @@ def _select_style_profile(reference_maps: list[str | Path] | None, profile: Styl
     return profile
 
 
+def _select_pattern_bank(reference_maps: list[str | Path] | None, style_index: dict[str, object] | None, tags: set[str]) -> list[dict[str, object]]:
+    if style_index and isinstance(style_index.get("patterns"), dict):
+        preferred_key = "mixed"
+        if "deathstream" in tags or "stream" in tags:
+            preferred_key = "stream"
+        elif "flow aim" in tags:
+            preferred_key = "flow aim"
+        elif "jump" in tags or "farm jump" in tags:
+            preferred_key = "jump"
+        patterns = style_index["patterns"].get(preferred_key) or style_index["patterns"].get("mixed") or []
+        return [pattern for pattern in patterns if isinstance(pattern, dict)]
+    if reference_maps:
+        bank = extract_pattern_bank(reference_maps)
+        if "deathstream" in tags or "stream" in tags:
+            return select_patterns(bank, "stream")
+        if "flow aim" in tags:
+            return select_patterns(bank, "flow aim")
+        if "jump" in tags or "farm jump" in tags:
+            return select_patterns(bank, "jump")
+        return select_patterns(bank, "mixed")
+    return []
+
+
+def _stamp_pattern(pattern: dict[str, object], origin_x: int, origin_y: int, start_time: int, beat_length: float) -> list[HitObjectIR]:
+    objects = [HitObjectIR(type=str(pattern.get("start_type", "circle")), start_ms=start_time, end_ms=start_time, x=origin_x, y=origin_y, semantic_role="generated:pattern")]
+    current_x = origin_x
+    current_y = origin_y
+    current_t = start_time
+    points = pattern.get("points", [])
+    gaps = pattern.get("gaps", [])
+    types = pattern.get("types", [])
+    for index, (dx, dy) in enumerate(points):
+        gap = int(gaps[index]) if index < len(gaps) else int(beat_length)
+        current_t += gap
+        current_x = int(clamp(current_x + dx, 32, 480))
+        current_y = int(clamp(current_y + dy, 32, 352))
+        object_type = str(types[index]) if index < len(types) else "circle"
+        objects.append(
+            HitObjectIR(
+                type=object_type,
+                start_ms=current_t,
+                end_ms=current_t,
+                x=current_x,
+                y=current_y,
+                semantic_role="generated:pattern",
+            )
+        )
+    return objects
+
+
 def arrange_objects(
     beatmap_ir: BeatmapIR,
     audio_analysis: AudioAnalysis | None = None,
@@ -142,6 +193,7 @@ def arrange_objects(
     spacing_scale: float = 1.0,
     density_scale: float = 1.0,
     slider_ratio_bias: float = 1.0,
+    pattern_bank: list[dict[str, object]] | None = None,
 ) -> BeatmapIR:
     style_target = style_target or StyleTarget(prompt_tags=["mixed"])
     rng = random.Random(seed)
@@ -161,6 +213,7 @@ def arrange_objects(
         style_profile=style_profile,
     )
     slider_probability = _slider_probability(tags, slider_ratio_bias)
+    pattern_bank = pattern_bank or []
 
     objects: list[HitObjectIR] = []
     x = 128
@@ -177,6 +230,27 @@ def arrange_objects(
         object_interval_ms = max(1, int(round(beat_length * step)))
         if previous_start is not None and beat - previous_start < max(10, int(round(beat_length / 4))):
             continue
+        if pattern_bank and emitted % 8 == 0 and rng.random() < 0.4:
+            pattern = pattern_bank[emitted % len(pattern_bank)]
+            seeded_x = int(clamp((96 if emitted % 2 == 0 else 416) + rng.randint(-20, 20), 32, 480))
+            seeded_y = int(clamp(96 + (emitted % 5) * 48 + rng.randint(-10, 10), 32, 352))
+            stamped = _stamp_pattern(pattern, seeded_x, seeded_y, beat, beat_length)
+            safe_stamped = []
+            last_end = previous_start if previous_start is not None else -10_000
+            for stamped_object in stamped:
+                if stamped_object.start_ms - last_end < 10:
+                    continue
+                stamped_object.semantic_role = f"generated:pattern:{section['label']}"
+                safe_stamped.append(stamped_object)
+                last_end = stamped_object.end_ms
+            if safe_stamped:
+                objects.extend(safe_stamped)
+                emitted += len(safe_stamped)
+                previous_start = safe_stamped[-1].start_ms
+                x = safe_stamped[-1].x
+                y = safe_stamped[-1].y
+                direction *= -1
+                continue
 
         if "flow aim" in tags:
             angle = emitted * 0.58
@@ -250,6 +324,7 @@ def _tune_map(
     style_target: StyleTarget,
     seed: int,
     ai_recipe: dict[str, object] | None,
+    pattern_bank: list[dict[str, object]] | None,
 ) -> tuple[BeatmapIR, list[dict[str, float]]]:
     spacing_scale = float((ai_recipe or {}).get("spacing_bias", 1.0))
     density_scale = float((ai_recipe or {}).get("density_bias", 1.0))
@@ -268,6 +343,7 @@ def _tune_map(
             spacing_scale=spacing_scale,
             density_scale=density_scale,
             slider_ratio_bias=slider_ratio_bias,
+            pattern_bank=pattern_bank,
         )
         stats = _estimate_map_stats(candidate)
         star_target = style_target.target_star
@@ -306,7 +382,7 @@ def _tune_map(
         spacing_scale = clamp(spacing_scale, 0.5, 2.2)
         density_scale = clamp(density_scale, 0.4, 2.2)
 
-    return best_map or arrange_objects(beatmap, audio_analysis=audio_analysis, style_profile=style_profile, style_target=style_target, seed=seed), history
+    return best_map or arrange_objects(beatmap, audio_analysis=audio_analysis, style_profile=style_profile, style_target=style_target, seed=seed, pattern_bank=pattern_bank), history
 
 
 def math_sin(value: float) -> float:
@@ -331,6 +407,7 @@ def generate_map(
     profile: StyleProfile | None = None,
     ai_recipe: dict[str, object] | None = None,
     reference_maps: list[str | Path] | None = None,
+    style_index: dict[str, object] | None = None,
 ) -> dict[str, object]:
     output_dir = Path(output_dir)
     analysis = analyze_audio(audio_path)
@@ -339,6 +416,7 @@ def generate_map(
     if reference_maps:
         style_target.reference_maps = [str(Path(path)) for path in reference_maps]
     style_profile = _select_style_profile(reference_maps, profile)
+    pattern_bank = _select_pattern_bank(reference_maps, style_index, _tag_set(style_target))
     style_target.section_density_plan = build_section_density_plan(analysis, style_target, style_profile=style_profile)
     beatmap = draft_skeleton(analysis, style_target)
     beatmap, tuning_history = _tune_map(
@@ -348,6 +426,7 @@ def generate_map(
         style_target=style_target,
         seed=seed,
         ai_recipe=ai_recipe,
+        pattern_bank=pattern_bank,
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     slug = Path(audio_path).stem.replace(" ", "_")
@@ -365,6 +444,7 @@ def generate_map(
         "analysis_path": analysis.path,
         "style_target": dataclass_to_dict(style_target),
         "style_profile": dataclass_to_dict(style_profile) if style_profile else None,
+        "pattern_count": len(pattern_bank),
         "tuning_history": tuning_history,
         "final_score": final_score,
         "validation_issues": [dataclass_to_dict(issue) for issue in beatmap.validation_report],

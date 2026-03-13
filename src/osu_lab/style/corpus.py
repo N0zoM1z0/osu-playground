@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from osu_lab.core.utils import dataclass_to_dict, json_dump
+from osu_lab.style.patterns import extract_pattern_bank, select_patterns
 from osu_lab.style.profile import build_style_profile, extract_map_style_metrics, merge_style_profiles
 
 
@@ -18,10 +19,17 @@ def build_style_index(paths: list[str | Path]) -> dict[str, object]:
     unique_maps = [Path(path) for path in dict.fromkeys(str(path) for path in map_paths)]
     profiles = [extract_map_style_metrics(path) for path in unique_maps]
     aggregate = merge_style_profiles(profiles)
+    pattern_bank = extract_pattern_bank(unique_maps)
     return {
         "map_count": len(profiles),
         "maps": [dataclass_to_dict(profile) for profile in profiles],
         "aggregate": dataclass_to_dict(aggregate),
+        "patterns": {
+            "jump": select_patterns(pattern_bank, "jump"),
+            "stream": select_patterns(pattern_bank, "stream"),
+            "flow aim": select_patterns(pattern_bank, "flow aim"),
+            "mixed": select_patterns(pattern_bank, "mixed"),
+        },
     }
 
 

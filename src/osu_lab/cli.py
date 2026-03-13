@@ -9,6 +9,7 @@ from osu_lab.beatmap.io import parse_osu
 from osu_lab.beatmap.validate import verify_beatmap
 from osu_lab.beatmap.verify_external import run_external_verifier
 from osu_lab.core.schema import schema_bundle
+from osu_lab.core.models import StyleProfile
 from osu_lab.core.utils import dataclass_to_dict, json_dump, json_print
 from osu_lab.eval.bench import benchmark_summary
 from osu_lab.generate.mapforge import generate_map
@@ -120,14 +121,23 @@ def _verify_path(path: Path, external_command: str | None = None) -> dict[str, o
     }
 
 
-def _profile_from_style_index(path: str | Path | None):
+def _style_index_bundle(path: str | Path | None):
     if not path:
-        return None
+        return None, None
     index = load_style_index(path)
     aggregate = index.get("aggregate")
     if not isinstance(aggregate, dict):
-        return None
-    return build_style_profile(aggregate.get("source_maps", []))
+        return None, index
+    profile = StyleProfile(
+        spacing_histogram=aggregate.get("spacing_histogram", {}),
+        angle_histogram=aggregate.get("angle_histogram", {}),
+        slider_ratio=aggregate.get("slider_ratio", 0.0),
+        burst_profile=aggregate.get("burst_profile", {}),
+        jump_stream_tech_scores=aggregate.get("jump_stream_tech_scores", {}),
+        section_density_curve=aggregate.get("section_density_curve", []),
+        source_maps=aggregate.get("source_maps", []),
+    )
+    return profile, index
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -186,6 +196,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "map" and args.map_command == "generate":
+        style_profile, style_index = _style_index_bundle(args.style_index)
         json_print(
             generate_map(
                 audio_path=args.audio,
@@ -194,8 +205,9 @@ def main(argv: list[str] | None = None) -> int:
                 seed=args.seed,
                 target_star=args.target_star,
                 target_pp=args.target_pp,
-                profile=_profile_from_style_index(args.style_index),
+                profile=style_profile,
                 reference_maps=args.reference_map,
+                style_index=style_index,
             )
         )
         return 0
