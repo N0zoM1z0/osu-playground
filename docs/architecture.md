@@ -135,8 +135,19 @@ Supported adapters:
 - `droid`
 - `kimi`
 - `kimi-thinking`
+- `mapperatorinator`
+- `osut5`
+- `osu-diffusion`
+- `osu-dreamer`
 
-The AI output is constrained to a small JSON recipe and never writes raw `.osu` text directly.
+Recipe backends are constrained to a small JSON recipe and never write raw `.osu` text directly.
+File-producing backends are wrapped behind a normalization layer:
+
+- run the backend non-interactively
+- detect the emitted `.osu` draft
+- parse and validate it locally
+- build a style report from the emitted draft
+- feed that draft back into the local rule-based post-processing path as a reference style source
 
 For Kimi, the implementation targets Moonshot's international OpenAI-compatible API:
 

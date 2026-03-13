@@ -24,7 +24,7 @@ The current implementation provides a working v0.1 foundation:
 - `tosu`-compatible live planning via current-beatmap file fetch
 - Windows `SendInput` execution path for explicit live injection runs
 - external verifier hook for `MapsetVerifier` or a custom command
-- non-interactive AI draft adapters for `claude`, `droid`, and native `kimi`
+- non-interactive AI draft adapters for `claude`, `droid`, native `kimi`, and optional file-producing backends such as `Mapperatorinator`, `osuT5`, `osu-diffusion`, and `osu-dreamer`
 - `rosu-pp-py` based map scoring
 - acceptance harnesses for round-trip, replay determinism, map validity, and style control
 - JSON-first CLI and automated tests
@@ -94,6 +94,18 @@ Draft with native Kimi international API:
 
 ```bash
 osu-lab ai draft kimi /path/to/song.wav --prompt "jump,flow aim" --dotenv-path .env
+```
+
+Wrap a local file-producing backend:
+
+```bash
+export OSU_LAB_MAPPERATORINATOR_ROOT=/path/to/Mapperatorinator
+osu-lab ai draft mapperatorinator /path/to/song.wav --prompt "jump" --out /tmp/ai-out
+```
+
+Run the aggregated acceptance harness:
+
+```bash
 osu-lab bench /path/to/fixtures --acceptance --audio /path/to/song.wav --out-dir /tmp/acceptance --prompt jump --prompt stream
 ```
 
@@ -154,6 +166,7 @@ docs/
 - `live arm --inject` only executes on Windows and uses `SendInput`, which is subject to UIPI.
 - `ai draft` uses non-interactive `claude` or `droid` CLIs to produce a structured recipe, then normalizes that recipe back into the local generator.
 - `ai draft kimi` uses Moonshot's international OpenAI-compatible endpoint at `https://api.moonshot.ai/v1`; this is distinct from the `.cn` platform.
+- file-producing backends can be enabled with `OSU_LAB_<BACKEND>_ROOT` or `OSU_LAB_<BACKEND>_COMMAND_TEMPLATE`; successful drafts are re-profiled and fed back through the local post-processing pipeline.
 - `style build-index` is the intended way to learn from a user-supplied local corpus without bundling third-party beatmaps into the repository.
 - `map generate` can consume both `--reference-map` inputs and a prebuilt `--style-index`, and now emits a section density plan in the resulting `style_target`.
 - `style build-index` now stores a lightweight pattern bank, and `map generate` can stamp retrieved reference patterns into the arranged output instead of relying only on global histogram bias.

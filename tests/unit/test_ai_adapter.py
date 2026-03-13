@@ -118,3 +118,55 @@ def test_kimi_normalization_reads_nested_style_blocks(monkeypatch, tmp_path: Pat
     assert result["draft"]["spacing_bias"] == 1.3
     assert result["draft"]["difficulty_bias"] == 1.2
     assert "jump" in result["draft"]["prompt_tags"]
+
+
+def test_mapperatorinator_adapter_wraps_external_map(monkeypatch, tmp_path: Path):
+    wav_path = tmp_path / "song.wav"
+    wav_path.write_bytes(Path("tests/fixtures/sample_map.osu").read_bytes())
+    backend_root = tmp_path / "mapperatorinator"
+    backend_root.mkdir()
+
+    class _Analysis:
+        def to_dict(self):
+            return {"bpm": 180.0, "beats_ms": [0, 333, 666], "path": str(wav_path), "duration_ms": 1000}
+
+    def _fake_run(command, cwd=None, check=False, capture_output=True, text=True):
+        output_arg = next(item for item in command if str(item).startswith("output_path="))
+        output_dir = Path(str(output_arg).split("=", 1)[1])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "draft.osu").write_bytes(Path("tests/fixtures/sample_map.osu").read_bytes())
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr("osu_lab.ai.adapters.analyze_audio", lambda path: _Analysis())
+    monkeypatch.setattr("osu_lab.ai.adapters.subprocess.run", _fake_run)
+    monkeypatch.setenv("OSU_LAB_MAPPERATORINATOR_ROOT", str(backend_root))
+    monkeypatch.setattr(
+        "osu_lab.ai.adapters.generate_map",
+        lambda audio_path, output_dir, prompt, seed=1, target_star=None, target_pp=None, ai_recipe=None, reference_maps=None, style_index=None: {
+            "osu": str(Path(output_dir) / "post.osu"),
+            "prompt": prompt,
+            "reference_maps": [str(item) for item in reference_maps or []],
+        },
+    )
+    result = draft_with_backend("mapperatorinator", wav_path, output_path=tmp_path / "out", prompt="jump")
+    assert result["status"] == "ok"
+    assert result["draft_map"]["path"].endswith("draft.osu")
+    assert result["generation"]["reference_maps"][0].endswith("draft.osu")
+
+
+def test_osut5_adapter_returns_actionable_error_when_model_missing(monkeypatch, tmp_path: Path):
+    wav_path = tmp_path / "song.wav"
+    wav_path.write_bytes(Path("tests/fixtures/sample_map.osu").read_bytes())
+    backend_root = tmp_path / "osut5"
+    backend_root.mkdir()
+
+    class _Analysis:
+        def to_dict(self):
+            return {"bpm": 180.0, "beats_ms": [0, 333, 666], "path": str(wav_path), "duration_ms": 1000}
+
+    monkeypatch.setattr("osu_lab.ai.adapters.analyze_audio", lambda path: _Analysis())
+    monkeypatch.setenv("OSU_LAB_OSUT5_ROOT", str(backend_root))
+    monkeypatch.delenv("OSU_LAB_OSUT5_MODEL_PATH", raising=False)
+    result = draft_with_backend("osut5", wav_path, output_path=tmp_path / "out", prompt="stream")
+    assert result["status"] == "error"
+    assert "OSU_LAB_OSUT5_MODEL_PATH" in result["message"]

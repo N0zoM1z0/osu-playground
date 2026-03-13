@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import urllib.error
@@ -9,7 +10,12 @@ import urllib.request
 from pathlib import Path
 
 from osu_lab.audio.analyze import analyze_audio
+from osu_lab.beatmap.io import parse_osu
+from osu_lab.beatmap.validate import verify_beatmap
+from osu_lab.core.utils import dataclass_to_dict
 from osu_lab.generate.mapforge import generate_map
+from osu_lab.integration.scoring import score_map
+from osu_lab.style.profile import build_style_profile, render_style_report
 
 
 AI_DRAFT_SCHEMA = {
@@ -30,6 +36,7 @@ AI_DRAFT_SCHEMA = {
 KIMI_BASE_URL = "https://api.moonshot.ai/v1"
 KIMI_DEFAULT_MODEL = "kimi-k2.5"
 KIMI_THINKING_MODEL = "kimi-k2-thinking"
+FILE_BACKENDS = {"mapperatorinator", "osut5", "osu-diffusion", "osu-dreamer"}
 
 
 def _load_dotenv(path: Path) -> dict[str, str]:
@@ -222,6 +229,231 @@ def _normalize_draft(draft: dict[str, object], fallback_prompt: str) -> dict[str
     }
 
 
+def _ai_context(
+    audio_path: Path,
+    analysis: dict[str, object],
+    prompt: str,
+    output_root: Path,
+    reference_maps: list[str | Path] | None = None,
+    target_star: float | None = None,
+) -> dict[str, str]:
+    title = audio_path.stem or "Generated"
+    reference_map = str(Path(reference_maps[0])) if reference_maps else ""
+    prompt_tags = ",".join(_normalize_prompt_tags([part.strip() for part in prompt.split(",") if part.strip()]))
+    return {
+        "audio_path": str(audio_path),
+        "output_path": str(output_root),
+        "beatmap_path": reference_map,
+        "reference_map": reference_map,
+        "bpm": str(analysis.get("bpm", 120.0)),
+        "offset": str((analysis.get("beats_ms") or [0])[0] if isinstance(analysis.get("beats_ms"), list) else 0),
+        "title": title,
+        "artist": "osu-lab",
+        "difficulty": str(target_star or 5.0),
+        "prompt_tags": prompt_tags or "mixed",
+        "descriptors": json.dumps(prompt_tags.split(",") if prompt_tags else ["mixed"]),
+        "model_path": os.environ.get("OSU_LAB_AI_MODEL_PATH", ""),
+        "ckpt_path": os.environ.get("OSU_LAB_AI_CKPT_PATH", ""),
+        "beatmap_idx": os.environ.get("OSU_LAB_OSU_DIFFUSION_BEATMAP_IDX", ""),
+        "num_classes": os.environ.get("OSU_LAB_OSU_DIFFUSION_NUM_CLASSES", ""),
+        "style_id": os.environ.get("OSU_LAB_OSU_DIFFUSION_STYLE_ID", ""),
+    }
+
+
+def _command_from_template(template: str, context: dict[str, str]) -> list[str]:
+    formatted = template.format(**context)
+    return shlex.split(formatted)
+
+
+def _backend_error(backend: str, message: str, **extra: object) -> dict[str, object]:
+    payload = {"status": "error", "backend": backend, "message": message}
+    payload.update(extra)
+    return payload
+
+
+def _python_command(root: Path, env_key: str) -> str:
+    explicit = os.environ.get(env_key)
+    if explicit:
+        return explicit
+    venv_python = root / ".venv" / "bin" / "python"
+    if venv_python.exists():
+        return str(venv_python)
+    windows_python = root / ".venv" / "Scripts" / "python.exe"
+    if windows_python.exists():
+        return str(windows_python)
+    return shutil.which("python") or "python"
+
+
+def _default_file_backend_command(backend: str, root: Path, context: dict[str, str]) -> tuple[list[str], Path]:
+    if backend == "mapperatorinator":
+        command = [
+            _python_command(root, "OSU_LAB_MAPPERATORINATOR_PYTHON"),
+            "inference.py",
+            f"audio_path={context['audio_path']}",
+            f"output_path={context['output_path']}",
+            "gamemode=0",
+            f"difficulty={context['difficulty']}",
+            "year=2023",
+            f"descriptors={context['descriptors']}",
+            "seed=1",
+        ]
+        if context["beatmap_path"]:
+            command.append(f"beatmap_path={context['beatmap_path']}")
+        return command, root
+    if backend == "osut5":
+        model_path = os.environ.get("OSU_LAB_OSUT5_MODEL_PATH", "")
+        if not model_path:
+            raise FileNotFoundError("OSU_LAB_OSUT5_MODEL_PATH is required for the osut5 adapter")
+        return (
+            [
+                _python_command(root, "OSU_LAB_OSUT5_PYTHON"),
+                "-m",
+                "inference",
+                f"model_path={model_path}",
+                f"audio_path={context['audio_path']}",
+                f"output_path={context['output_path']}",
+                f"bpm={context['bpm']}",
+                f"offset={context['offset']}",
+                f"title={context['title']}",
+                f"artist={context['artist']}",
+            ],
+            root,
+        )
+    if backend == "osu-dreamer":
+        model_path = os.environ.get("OSU_LAB_OSU_DREAMER_MODEL_PATH", "")
+        if not model_path:
+            raise FileNotFoundError("OSU_LAB_OSU_DREAMER_MODEL_PATH is required for the osu-dreamer adapter")
+        uv = shutil.which("uv") or "uv"
+        return (
+            [
+                uv,
+                "run",
+                "python",
+                "-m",
+                "osu_dreamer.model",
+                "predict",
+                "--model_path",
+                model_path,
+                "--audio_file",
+                context["audio_path"],
+                "--num_samples",
+                "1",
+                "--title",
+                context["title"],
+                "--artist",
+                context["artist"],
+            ],
+            Path(context["output_path"]),
+        )
+    if backend == "osu-diffusion":
+        if not context["beatmap_path"]:
+            raise FileNotFoundError("osu-diffusion requires at least one --reference-map to supply rhythm and spacing")
+        ckpt_path = os.environ.get("OSU_LAB_OSU_DIFFUSION_CKPT", "")
+        if not ckpt_path:
+            raise FileNotFoundError("OSU_LAB_OSU_DIFFUSION_CKPT is required for the osu-diffusion adapter")
+        beatmap_idx = os.environ.get("OSU_LAB_OSU_DIFFUSION_BEATMAP_IDX", "")
+        num_classes = os.environ.get("OSU_LAB_OSU_DIFFUSION_NUM_CLASSES", "")
+        if not beatmap_idx or not num_classes:
+            raise FileNotFoundError("OSU_LAB_OSU_DIFFUSION_BEATMAP_IDX and OSU_LAB_OSU_DIFFUSION_NUM_CLASSES are required for the osu-diffusion adapter")
+        return (
+            [
+                _python_command(root, "OSU_LAB_OSU_DIFFUSION_PYTHON"),
+                "sample.py",
+                "--beatmap",
+                context["beatmap_path"],
+                "--ckpt",
+                ckpt_path,
+                "--beatmap_idx",
+                beatmap_idx,
+                "--num-classes",
+                num_classes,
+            ],
+            Path(context["output_path"]),
+        )
+    raise FileNotFoundError(f"unsupported file backend: {backend}")
+
+
+def _discover_generated_map(output_root: Path, fallback_root: Path | None = None) -> Path | None:
+    candidates = sorted(output_root.rglob("*.osu"), key=lambda path: path.stat().st_mtime, reverse=True) if output_root.exists() else []
+    if not candidates and fallback_root is not None and fallback_root.exists():
+        candidates = sorted(fallback_root.rglob("*.osu"), key=lambda path: path.stat().st_mtime, reverse=True)
+    return candidates[0] if candidates else None
+
+
+def _summarize_generated_map(path: Path) -> dict[str, object]:
+    issues = verify_beatmap(parse_osu(path))
+    profile = build_style_profile([path])
+    return {
+        "path": str(path),
+        "score": score_map(path),
+        "issue_count": len([issue for issue in issues if issue.severity == "error"]),
+        "warning_count": len([issue for issue in issues if issue.severity == "warning"]),
+        "issues": [dataclass_to_dict(issue) for issue in issues],
+        "style_report": render_style_report(profile),
+    }
+
+
+def _run_file_backend(
+    backend: str,
+    audio_path: Path,
+    output_root: Path,
+    analysis: dict[str, object],
+    prompt: str,
+    reference_maps: list[str | Path] | None = None,
+    target_star: float | None = None,
+) -> dict[str, object]:
+    env_prefix = backend.upper().replace("-", "_")
+    template = os.environ.get(f"OSU_LAB_{env_prefix}_COMMAND_TEMPLATE", "")
+    root_value = os.environ.get(f"OSU_LAB_{env_prefix}_ROOT", "")
+    if not template and not root_value:
+        return _backend_error(
+            backend,
+            f"set OSU_LAB_{env_prefix}_ROOT or OSU_LAB_{env_prefix}_COMMAND_TEMPLATE to enable this adapter",
+        )
+    output_root.mkdir(parents=True, exist_ok=True)
+    context = _ai_context(audio_path, analysis, prompt, output_root, reference_maps=reference_maps, target_star=target_star)
+    try:
+        if template:
+            command = _command_from_template(template, context)
+            cwd = output_root
+            fallback_root = Path(root_value) if root_value else output_root
+        else:
+            root = Path(root_value)
+            if not root.exists():
+                return _backend_error(backend, f"configured root does not exist: {root}")
+            command, cwd = _default_file_backend_command(backend, root, context)
+            fallback_root = root
+    except FileNotFoundError as exc:
+        return _backend_error(backend, str(exc))
+    result = subprocess.run(command, cwd=cwd, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        return _backend_error(
+            backend,
+            f"{backend} command failed",
+            returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            command=command,
+        )
+    generated_map = _discover_generated_map(output_root, fallback_root=fallback_root)
+    if generated_map is None:
+        return _backend_error(
+            backend,
+            f"{backend} completed but no .osu output was found",
+            stdout=result.stdout,
+            stderr=result.stderr,
+            command=command,
+        )
+    return {
+        "status": "ok",
+        "backend": backend,
+        "draft_map": str(generated_map),
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "command": command,
+    }
+
+
 def _extract_payload(result: subprocess.CompletedProcess[str], backend: str) -> dict[str, object]:
     if result.returncode != 0:
         return {
@@ -273,6 +505,9 @@ def draft_with_backend(
     source = Path(audio_path)
     analysis = analyze_audio(source).to_dict()
     prompt_text = _ai_prompt(source, analysis, prompt=prompt)
+    output_root = Path(output_path) if output_path else source.parent / "ai-drafts"
+    if output_root.suffix:
+        output_root = output_root.parent
 
     if backend_key in {"claude", "claude-agent"}:
         extracted = _extract_payload(_run_claude(prompt_text), backend=backend)
@@ -282,16 +517,46 @@ def draft_with_backend(
         extracted = _run_kimi(prompt_text, model=KIMI_DEFAULT_MODEL, dotenv_path=Path(dotenv_path) if dotenv_path else None)
     elif backend_key in {"kimi-thinking", "kimi-k2-thinking"}:
         extracted = _run_kimi(prompt_text, model=KIMI_THINKING_MODEL, dotenv_path=Path(dotenv_path) if dotenv_path else None)
+    elif backend_key in FILE_BACKENDS:
+        extracted = _run_file_backend(
+            backend_key,
+            source,
+            output_root / backend_key / "raw",
+            analysis,
+            prompt,
+            reference_maps=reference_maps,
+            target_star=target_star,
+        )
     else:
         return {"status": "error", "backend": backend, "message": f"unsupported backend: {backend}"}
 
     if extracted["status"] != "ok":
         return extracted
+    if backend_key in FILE_BACKENDS:
+        draft_summary = _summarize_generated_map(Path(extracted["draft_map"]))
+        chained_reference_maps = [Path(extracted["draft_map"]), *(reference_maps or [])]
+        generation = generate_map(
+            audio_path=source,
+            output_dir=output_root / backend_key / "postprocessed",
+            prompt=prompt,
+            seed=seed,
+            target_star=target_star,
+            target_pp=target_pp,
+            reference_maps=chained_reference_maps,
+            style_index=style_index,
+        )
+        return {
+            "status": "ok",
+            "backend": backend,
+            "draft_source": "external-map",
+            "draft_map": draft_summary,
+            "generation": generation,
+            "command": extracted.get("command"),
+            "stdout": extracted.get("stdout"),
+            "stderr": extracted.get("stderr"),
+        }
     draft = _normalize_draft(extracted["draft"], fallback_prompt=prompt)
     merged_prompt = ",".join(dict.fromkeys([*(draft.get("prompt_tags", []) or []), *[part.strip() for part in prompt.split(",") if part.strip()]]))
-    output_root = Path(output_path) if output_path else source.parent / "ai-drafts"
-    if output_root.suffix:
-        output_root = output_root.parent
     generation = generate_map(
         audio_path=source,
         output_dir=output_root,
