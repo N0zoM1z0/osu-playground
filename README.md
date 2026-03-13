@@ -147,6 +147,7 @@ docs/
 - `ai draft` uses non-interactive `claude` or `droid` CLIs to produce a structured recipe, then normalizes that recipe back into the local generator.
 - `style build-index` is the intended way to learn from a user-supplied local corpus without bundling third-party beatmaps into the repository.
 - `map generate` can consume both `--reference-map` inputs and a prebuilt `--style-index`, and now emits a section density plan in the resulting `style_target`.
+- `style build-index` now stores a lightweight pattern bank, and `map generate` can stamp retrieved reference patterns into the arranged output instead of relying only on global histogram bias.
 
 ## Docs
 

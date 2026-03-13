@@ -103,6 +103,7 @@ The repository does not ship third-party beatmaps. Instead, the workflow expects
 - aggregate histograms
 - section density curves
 - heuristic class signals
+- lightweight pattern banks for retrieval-driven arrangement
 
 This keeps the project local-only while still enabling prompt and reference driven generation.
 

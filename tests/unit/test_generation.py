@@ -29,3 +29,10 @@ def test_generate_map_returns_tuning_history(tmp_path: Path):
     assert result["tuning_history"]
     assert "stars" in result["final_score"]
 
+
+def test_generate_map_uses_reference_patterns(tmp_path: Path):
+    wav_path = tmp_path / "song.wav"
+    out_dir = tmp_path / "out"
+    _write_click_track(wav_path)
+    result = generate_map(wav_path, out_dir, prompt="jump", seed=2, reference_maps=["tests/fixtures/sample_map.osu"])
+    assert result["pattern_count"] > 0
