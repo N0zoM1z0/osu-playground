@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 
 from osu_lab.beatmap.io import parse_osu
+from osu_lab.core.utils import clamp
 from osu_lab.integration.scoring import score_map
 
 
@@ -153,3 +154,103 @@ def select_patterns(
         reverse=True,
     )
     return ranked[:limit]
+
+
+def transform_pattern(
+    pattern: dict[str, object],
+    scale: float = 1.0,
+    mirror_x: bool = False,
+    mirror_y: bool = False,
+    rotate_quadrants: int = 0,
+) -> dict[str, object]:
+    transformed_points = []
+    angle = rotate_quadrants % 4
+    for raw_dx, raw_dy in pattern.get("points", []):
+        dx = -raw_dx if mirror_x else raw_dx
+        dy = -raw_dy if mirror_y else raw_dy
+        dx *= scale
+        dy *= scale
+        if angle == 1:
+            dx, dy = -dy, dx
+        elif angle == 2:
+            dx, dy = -dx, -dy
+        elif angle == 3:
+            dx, dy = dy, -dx
+        transformed_points.append((int(round(dx)), int(round(dy))))
+    transformed = dict(pattern)
+    transformed["points"] = transformed_points
+    transformed["span"] = max((math.hypot(dx, dy) for dx, dy in transformed_points), default=0.0)
+    transformed["transform"] = {
+        "scale": scale,
+        "mirror_x": mirror_x,
+        "mirror_y": mirror_y,
+        "rotate_quadrants": rotate_quadrants % 4,
+    }
+    return transformed
+
+
+def project_pattern_positions(pattern: dict[str, object], origin_x: int, origin_y: int) -> list[tuple[int, int]]:
+    positions = [(origin_x, origin_y)]
+    current_x = origin_x
+    current_y = origin_y
+    for dx, dy in pattern.get("points", []):
+        current_x += int(dx)
+        current_y += int(dy)
+        positions.append((current_x, current_y))
+    return positions
+
+
+def adapt_pattern_to_context(
+    pattern: dict[str, object],
+    origin_x: int,
+    origin_y: int,
+    section_spacing: int,
+    previous_vector: tuple[float, float] | None = None,
+) -> dict[str, object]:
+    base_span = max(1.0, float(pattern.get("span", 0.0)))
+    target_scale = max(0.6, min(1.5, section_spacing / base_span))
+    scale_candidates = sorted({round(target_scale, 2), round(max(0.75, target_scale * 0.9), 2), round(min(1.35, target_scale * 1.1), 2)})
+    previous_heading = None
+    if previous_vector is not None and (previous_vector[0] or previous_vector[1]):
+        previous_heading = math.degrees(math.atan2(previous_vector[1], previous_vector[0]))
+
+    best = dict(pattern)
+    best_score = float("-inf")
+    for scale in scale_candidates:
+        for mirror_x in (False, True):
+            for mirror_y in (False, True):
+                for rotation in range(4):
+                    candidate = transform_pattern(
+                        pattern,
+                        scale=scale,
+                        mirror_x=mirror_x,
+                        mirror_y=mirror_y,
+                        rotate_quadrants=rotation,
+                    )
+                    positions = project_pattern_positions(candidate, origin_x, origin_y)
+                    clamped_positions = [
+                        (
+                            int(clamp(x, 32, 480)),
+                            int(clamp(y, 32, 352)),
+                        )
+                        for x, y in positions
+                    ]
+                    boundary_penalty = sum(
+                        abs(clamped_x - x) + abs(clamped_y - y)
+                        for (x, y), (clamped_x, clamped_y) in zip(positions, clamped_positions)
+                    )
+                    score = -boundary_penalty * 2.0
+                    score -= abs(float(candidate.get("span", 0.0)) - section_spacing) * 0.2
+                    points = candidate.get("points", [])
+                    if previous_heading is not None and points:
+                        current_heading = math.degrees(math.atan2(points[0][1], points[0][0]))
+                        turn = abs(current_heading - previous_heading)
+                        score -= min(turn, 360.0 - turn) * 0.25
+                    if positions[-1][0] < 64 or positions[-1][0] > 448:
+                        score -= 12.0
+                    if positions[-1][1] < 64 or positions[-1][1] > 320:
+                        score -= 8.0
+                    if score > best_score:
+                        best_score = score
+                        best = candidate
+    return best

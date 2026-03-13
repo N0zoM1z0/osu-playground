@@ -11,7 +11,7 @@ from osu_lab.beatmap.validate import verify_beatmap
 from osu_lab.core.models import AudioAnalysis, BeatmapIR, HitObjectIR, Segment, StyleProfile, StyleTarget, TimingGrid, TimingPoint, default_metadata
 from osu_lab.core.utils import clamp, dataclass_to_dict
 from osu_lab.integration.scoring import score_map
-from osu_lab.style.patterns import extract_pattern_bank, select_patterns
+from osu_lab.style.patterns import adapt_pattern_to_context, extract_pattern_bank, select_patterns
 from osu_lab.style.profile import build_style_profile, build_style_profile as _build_style_profile_single, style_distance
 from osu_lab.style.prompt import parse_style_prompt
 
@@ -240,6 +240,14 @@ def _stamp_pattern(pattern: dict[str, object], origin_x: int, origin_y: int, sta
     return objects
 
 
+def _previous_vector(objects: list[HitObjectIR], fallback_direction: int, spacing: int) -> tuple[float, float]:
+    if len(objects) >= 2:
+        current = objects[-1]
+        previous = objects[-2]
+        return float(current.x - previous.x), float(current.y - previous.y)
+    return float(fallback_direction * max(32, spacing)), 0.0
+
+
 def arrange_objects(
     beatmap_ir: BeatmapIR,
     audio_analysis: AudioAnalysis | None = None,
@@ -300,13 +308,30 @@ def arrange_objects(
             pattern = section_patterns[emitted % len(section_patterns)]
             seeded_x = int(clamp((96 if emitted % 2 == 0 else 416) + rng.randint(-20, 20), 32, 480))
             seeded_y = int(clamp(96 + (emitted % 5) * 48 + rng.randint(-10, 10), 32, 352))
+            if objects:
+                seeded_x = int(clamp(x + rng.randint(-24, 24), 32, 480))
+                seeded_y = int(clamp(y + rng.randint(-24, 24), 32, 352))
+            pattern = adapt_pattern_to_context(
+                pattern,
+                origin_x=seeded_x,
+                origin_y=seeded_y,
+                section_spacing=section_spacing,
+                previous_vector=_previous_vector(objects, direction, section_spacing),
+            )
             stamped = _stamp_pattern(pattern, seeded_x, seeded_y, beat, beat_length)
             safe_stamped = []
             last_end = previous_start if previous_start is not None else -10_000
             for stamped_object in stamped:
                 if stamped_object.start_ms - last_end < 10:
                     continue
-                stamped_object.semantic_role = f"generated:pattern:{section['label']}"
+                transform_meta = pattern.get("transform") if isinstance(pattern.get("transform"), dict) else {}
+                transform_tag = "transformed" if (
+                    round(float(transform_meta.get("scale", 1.0)), 2) != 1.0
+                    or bool(transform_meta.get("mirror_x"))
+                    or bool(transform_meta.get("mirror_y"))
+                    or int(transform_meta.get("rotate_quadrants", 0)) != 0
+                ) else "native"
+                stamped_object.semantic_role = f"generated:pattern:{section['label']}:{transform_tag}"
                 stamped_object.hitsounds = _hitsound_for_object(
                     stamped_object.start_ms,
                     beat_length,

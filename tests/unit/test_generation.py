@@ -40,6 +40,16 @@ def test_generate_map_uses_reference_patterns(tmp_path: Path):
     assert result["pattern_count"] > 0
 
 
+def test_reference_patterns_are_stitched_into_output(tmp_path: Path):
+    wav_path = tmp_path / "song.wav"
+    out_dir = tmp_path / "out"
+    _write_click_track(wav_path, bpm=180.0)
+    result = generate_map(wav_path, out_dir, prompt="jump", seed=8, reference_maps=["tests/fixtures/sample_map.osu"])
+    generated = Path(result["osu"]).read_text(encoding="utf-8")
+    assert result["pattern_count"] > 0
+    assert "sample_map" not in generated
+
+
 def test_generate_map_emits_hitsound_summary(tmp_path: Path):
     wav_path = tmp_path / "song.wav"
     out_dir = tmp_path / "out"
@@ -66,3 +76,23 @@ def test_section_arrangement_can_emit_break_spinner():
     arranged = arrange_objects(beatmap, audio_analysis=analysis, style_target=target, seed=4)
     assert any(item.hitsounds > 0 for item in arranged.objects)
     assert any("chorus" in item.semantic_role or "break" in item.semantic_role for item in arranged.objects)
+
+
+def test_pattern_stitching_marks_transformed_semantics():
+    analysis = AudioAnalysis(
+        path="virtual.wav",
+        duration_ms=6000,
+        bpm=180.0,
+        beats_ms=list(range(0, 6000, 333)),
+        segments=[Segment(start_ms=0, end_ms=6000, label="chorus", confidence=1.0)],
+    )
+    target = parse_style_prompt("jump")
+    beatmap = draft_skeleton(analysis, target)
+    arranged = arrange_objects(
+        beatmap,
+        audio_analysis=analysis,
+        style_target=target,
+        seed=8,
+        pattern_bank=[{"start_type": "circle", "points": [(180, 0), (180, 0)], "gaps": [333, 333], "types": ["circle", "circle"], "span": 180.0, "label": "jump"}],
+    )
+    assert any("generated:pattern:chorus" in item.semantic_role for item in arranged.objects)
