@@ -78,6 +78,83 @@ class StyleProfile:
 
 
 @dataclass(slots=True)
+class NoteSelectionConfig:
+    chart_source_bias: str = "mixed-following"
+    onset_gate: float = 0.35
+    anchor_downbeat_bonus: float = 0.25
+    phrase_peak_bonus: float = 0.35
+    rest_gate: float = 0.18
+    repetition_window_ms: int = 750
+    max_density_multiplier: float = 1.5
+
+
+@dataclass(slots=True)
+class SelectedEvent:
+    time_ms: int
+    role: str
+    confidence: float
+    selected: bool = True
+    source: str = "beat"
+    section_label: str = "main"
+    phrase_index: int = 0
+    reason: str = ""
+    features: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TimingDraft:
+    bpm: float
+    offset_ms: int
+    uninherited_points: list[dict[str, Any]] = field(default_factory=list)
+    inherited_points: list[dict[str, Any]] = field(default_factory=list)
+    breaks: list[dict[str, int]] = field(default_factory=list)
+    kiai_ranges: list[dict[str, int]] = field(default_factory=list)
+    preview_time_ms: int = 0
+    report: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class StylePolicyPack:
+    name: str
+    density_policy: float = 1.0
+    rhythm_simplification: float = 0.0
+    note_selection_bias: dict[str, float] = field(default_factory=dict)
+    spacing_schedule: dict[str, float] = field(default_factory=dict)
+    angle_policy: dict[str, float] = field(default_factory=dict)
+    slider_policy: dict[str, float] = field(default_factory=dict)
+    phrase_continuity: float = 1.0
+    chorus_lift: float = 0.0
+    strain_choreography: dict[str, float] = field(default_factory=dict)
+    repetition_policy: float = 1.0
+    rest_policy: float = 1.0
+    hitsound_policy: dict[str, float] = field(default_factory=dict)
+    sv_policy: dict[str, float] = field(default_factory=dict)
+    ranking_weights: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class PhrasePlan:
+    section_label: str
+    phrase_index: int
+    start_ms: int
+    end_ms: int
+    energy: float
+    movement_kind: str
+    expected_density: float
+    event_count: int
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class MapQualityReport:
+    overall_score: float
+    metrics: dict[str, float] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+    regeneration_hints: list[str] = field(default_factory=list)
+    section_scores: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class HitObjectIR:
     type: str
     start_ms: int
@@ -172,4 +249,3 @@ def default_metadata(audio_filename: str, title: str = "Generated", version: str
         "BeatmapSetID": -1,
         "AudioFilename": audio_filename,
     }
-

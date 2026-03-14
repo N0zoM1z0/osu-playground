@@ -1,6 +1,19 @@
 from __future__ import annotations
 
-from osu_lab.core.models import AudioAnalysis, BeatmapIR, ReplayPlan, StyleProfile, StyleTarget, TimingGrid
+from osu_lab.core.models import (
+    AudioAnalysis,
+    BeatmapIR,
+    MapQualityReport,
+    NoteSelectionConfig,
+    PhrasePlan,
+    ReplayPlan,
+    SelectedEvent,
+    StylePolicyPack,
+    StyleProfile,
+    StyleTarget,
+    TimingDraft,
+    TimingGrid,
+)
 
 
 def schema_bundle() -> dict[str, object]:
@@ -56,6 +69,89 @@ def schema_bundle() -> dict[str, object]:
                 "section_density_curve": {"type": "array", "items": {"type": "number"}},
             },
         },
+        "NoteSelectionConfig": {
+            "type": "object",
+            "properties": {
+                "chart_source_bias": {"type": "string"},
+                "onset_gate": {"type": "number"},
+                "anchor_downbeat_bonus": {"type": "number"},
+                "phrase_peak_bonus": {"type": "number"},
+                "rest_gate": {"type": "number"},
+                "repetition_window_ms": {"type": "integer"},
+                "max_density_multiplier": {"type": "number"},
+            },
+        },
+        "SelectedEvent": {
+            "type": "object",
+            "properties": {
+                "time_ms": {"type": "integer"},
+                "role": {"type": "string"},
+                "confidence": {"type": "number"},
+                "selected": {"type": "boolean"},
+                "source": {"type": "string"},
+                "section_label": {"type": "string"},
+                "phrase_index": {"type": "integer"},
+                "reason": {"type": "string"},
+                "features": {"type": "object"},
+            },
+        },
+        "TimingDraft": {
+            "type": "object",
+            "properties": {
+                "bpm": {"type": "number"},
+                "offset_ms": {"type": "integer"},
+                "uninherited_points": {"type": "array"},
+                "inherited_points": {"type": "array"},
+                "breaks": {"type": "array"},
+                "kiai_ranges": {"type": "array"},
+                "preview_time_ms": {"type": "integer"},
+                "report": {"type": "object"},
+            },
+        },
+        "StylePolicyPack": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "density_policy": {"type": "number"},
+                "rhythm_simplification": {"type": "number"},
+                "note_selection_bias": {"type": "object"},
+                "spacing_schedule": {"type": "object"},
+                "angle_policy": {"type": "object"},
+                "slider_policy": {"type": "object"},
+                "phrase_continuity": {"type": "number"},
+                "chorus_lift": {"type": "number"},
+                "strain_choreography": {"type": "object"},
+                "repetition_policy": {"type": "number"},
+                "rest_policy": {"type": "number"},
+                "hitsound_policy": {"type": "object"},
+                "sv_policy": {"type": "object"},
+                "ranking_weights": {"type": "object"},
+            },
+        },
+        "PhrasePlan": {
+            "type": "object",
+            "properties": {
+                "section_label": {"type": "string"},
+                "phrase_index": {"type": "integer"},
+                "start_ms": {"type": "integer"},
+                "end_ms": {"type": "integer"},
+                "energy": {"type": "number"},
+                "movement_kind": {"type": "string"},
+                "expected_density": {"type": "number"},
+                "event_count": {"type": "integer"},
+                "notes": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        "MapQualityReport": {
+            "type": "object",
+            "properties": {
+                "overall_score": {"type": "number"},
+                "metrics": {"type": "object"},
+                "warnings": {"type": "array", "items": {"type": "string"}},
+                "regeneration_hints": {"type": "array", "items": {"type": "string"}},
+                "section_scores": {"type": "array"},
+            },
+        },
         "BeatmapIR": {
             "type": "object",
             "required": ["metadata", "difficulty_settings", "timing_grid", "objects"],
@@ -85,6 +181,12 @@ def schema_bundle() -> dict[str, object]:
             TimingGrid.__name__,
             StyleTarget.__name__,
             StyleProfile.__name__,
+            NoteSelectionConfig.__name__,
+            SelectedEvent.__name__,
+            TimingDraft.__name__,
+            StylePolicyPack.__name__,
+            PhrasePlan.__name__,
+            MapQualityReport.__name__,
             BeatmapIR.__name__,
             ReplayPlan.__name__,
         ],
