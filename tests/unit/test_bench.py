@@ -3,7 +3,7 @@ import wave
 import json
 from pathlib import Path
 
-from osu_lab.eval.bench import benchmark_audio_tracking, benchmark_style_control, benchmark_summary
+from osu_lab.eval.bench import benchmark_audio_tracking, benchmark_auto_workflow, benchmark_style_control, benchmark_summary
 
 
 def _write_click_track(path: Path, bpm: float = 150.0, seconds: int = 4, sample_rate: int = 44100) -> None:
@@ -63,3 +63,18 @@ def test_benchmark_audio_tracking_reads_manifest(tmp_path: Path):
     assert result["case_count"] == 1
     assert result["median_bpm_abs_error"] < 1.0
     assert result["median_beat_timing_error_ms"] < 35.0
+
+
+def test_benchmark_auto_workflow_reports_stability(tmp_path: Path):
+    audio = tmp_path / "auto.wav"
+    _write_click_track(audio, bpm=130.0)
+    result = benchmark_auto_workflow(
+        audio_path=audio,
+        output_dir=tmp_path / "auto-bench",
+        prompt="flow aim",
+        refs=["tests/fixtures"],
+        seed=4,
+        candidate_count=2,
+    )
+    assert result["ranking_score_stability"] is True
+    assert result["selected_event_count"] >= 1

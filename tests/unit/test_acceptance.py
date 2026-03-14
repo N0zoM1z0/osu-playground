@@ -68,3 +68,4 @@ def test_run_acceptance_reports_roundtrip_and_generation(tmp_path: Path):
     assert report["audio"]["median_bpm_abs_error"] < 1.0
     assert "style_control" in report
     assert "generation" in report
+    assert report["auto_workflow"]["ranking_score_stability"] is True

@@ -8,6 +8,7 @@ from osu_lab.audio.analyze import analyze_audio
 from osu_lab.generate.mapforge import generate_map
 from osu_lab.integration.scoring import score_map
 from osu_lab.style.profile import build_style_profile, classify_map, style_distance
+from osu_lab.workflows.auto_map import run_auto_map
 
 
 def benchmark_summary(fixtures_dir: str | Path) -> dict[str, object]:
@@ -176,3 +177,48 @@ def benchmark_style_control(
         result["mean_reference_improvement_ratio"] = sum(improvements) / max(1, len(improvements))
         result["reference_maps"] = [str(Path(path)) for path in reference_maps or []]
     return result
+
+
+def benchmark_auto_workflow(
+    audio_path: str | Path,
+    output_dir: str | Path,
+    prompt: str,
+    refs: list[str | Path] | None = None,
+    seed: int = 1,
+    candidate_count: int = 4,
+    target_star: float | None = None,
+    target_pp: float | None = None,
+) -> dict[str, object]:
+    first = run_auto_map(
+        audio_path=audio_path,
+        output_dir=Path(output_dir) / "run_a",
+        prompt=prompt,
+        refs=refs,
+        target_star=target_star,
+        target_pp=target_pp,
+        candidate_count=candidate_count,
+        seed=seed,
+    )
+    second = run_auto_map(
+        audio_path=audio_path,
+        output_dir=Path(output_dir) / "run_b",
+        prompt=prompt,
+        refs=refs,
+        target_star=target_star,
+        target_pp=target_pp,
+        candidate_count=candidate_count,
+        seed=seed,
+    )
+    first_ranking = [(item["path"], item["rank_score"]) for item in first["candidate_search"]["ranking"]]
+    second_ranking = [(item["path"], item["rank_score"]) for item in second["candidate_search"]["ranking"]]
+    ranking_scores_match = [left[1] for left in first_ranking] == [right[1] for right in second_ranking]
+    return {
+        "prompt": prompt,
+        "candidate_count": candidate_count,
+        "first_best": first["best_candidate"]["rank_score"] if first["best_candidate"] else None,
+        "second_best": second["best_candidate"]["rank_score"] if second["best_candidate"] else None,
+        "ranking_score_stability": ranking_scores_match,
+        "best_quality_score": first["best_candidate"]["quality"]["overall_score"] if first["best_candidate"] else None,
+        "selected_event_count": first["note_selection"]["summary"]["selected_count"],
+        "timing_section_count": len(first["timing_draft"]["uninherited_points"]),
+    }

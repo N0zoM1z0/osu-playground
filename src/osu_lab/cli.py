@@ -12,13 +12,15 @@ from osu_lab.core.schema import schema_bundle
 from osu_lab.core.models import StyleProfile
 from osu_lab.core.utils import dataclass_to_dict, json_dump, json_print
 from osu_lab.eval.acceptance import run_acceptance
-from osu_lab.eval.bench import benchmark_audio_tracking, benchmark_summary
+from osu_lab.eval.bench import benchmark_audio_tracking, benchmark_auto_workflow, benchmark_summary
+from osu_lab.eval.map_quality import evaluate_map_quality
 from osu_lab.generate.mapforge import generate_map
 from osu_lab.integration.scoring import score_map
 from osu_lab.live.planner import arm_live_plan, plan_live_play
 from osu_lab.replay.synth import dump_replay_plan, inspect_replay, write_replay
 from osu_lab.style.corpus import build_style_index, load_style_index
 from osu_lab.style.profile import build_style_profile, classify_map, render_style_report
+from osu_lab.workflows.auto_map import run_auto_map
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -76,9 +78,21 @@ def build_parser() -> argparse.ArgumentParser:
     map_generate.add_argument("--target-pp", type=float)
     map_generate.add_argument("--reference-map", action="append", default=[])
     map_generate.add_argument("--style-index")
+    map_auto = map_sub.add_parser("auto")
+    map_auto.add_argument("--audio", required=True)
+    map_auto.add_argument("--prompt", required=True)
+    map_auto.add_argument("--refs", action="append", default=[])
+    map_auto.add_argument("--target-stars", type=float)
+    map_auto.add_argument("--target-pp", type=float)
+    map_auto.add_argument("--candidate-count", type=int, default=4)
+    map_auto.add_argument("--seed", type=int, default=1)
+    map_auto.add_argument("--out", required=True)
+    map_auto.add_argument("--no-keep-intermediate", action="store_true")
     map_verify = map_sub.add_parser("verify")
     map_verify.add_argument("path")
     map_verify.add_argument("--external-command")
+    map_quality = map_sub.add_parser("quality")
+    map_quality.add_argument("path")
     map_score = map_sub.add_parser("score")
     map_score.add_argument("path")
     map_score.add_argument("--mods", default="")
@@ -119,6 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--prompt", action="append", default=[])
     bench.add_argument("--reference-map", action="append", default=[])
     bench.add_argument("--seed", type=int, default=1)
+    bench.add_argument("--auto-workflow", action="store_true")
     bench.add_argument("--acceptance", action="store_true")
     bench.add_argument("--target-star", type=float)
     bench.add_argument("--target-pp", type=float)
@@ -234,6 +249,22 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
+    if args.command == "map" and args.map_command == "auto":
+        json_print(
+            run_auto_map(
+                audio_path=args.audio,
+                output_dir=args.out,
+                prompt=args.prompt,
+                refs=args.refs,
+                target_star=args.target_stars,
+                target_pp=args.target_pp,
+                candidate_count=args.candidate_count,
+                seed=args.seed,
+                keep_intermediate=not args.no_keep_intermediate,
+            )
+        )
+        return 0
+
     if args.command == "map" and args.map_command == "verify":
         path = Path(args.path)
         if path.is_dir():
@@ -241,6 +272,11 @@ def main(argv: list[str] | None = None) -> int:
             json_print({"path": str(path), "maps": results})
             return 0
         json_print(_verify_path(path, external_command=args.external_command))
+        return 0
+
+    if args.command == "map" and args.map_command == "quality":
+        beatmap = parse_osu(args.path)
+        json_print(evaluate_map_quality(beatmap))
         return 0
 
     if args.command == "map" and args.map_command == "score":
@@ -314,6 +350,20 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.audio_manifest:
             json_print(benchmark_audio_tracking(args.audio_manifest))
+            return 0
+        if args.auto_workflow:
+            json_print(
+                benchmark_auto_workflow(
+                    audio_path=args.audio,
+                    output_dir=args.out_dir or "/tmp/osu-lab-auto-bench",
+                    prompt=(args.prompt or ["mixed"])[0],
+                    refs=args.reference_map,
+                    seed=args.seed,
+                    candidate_count=max(2, len(args.prompt) or 4),
+                    target_star=args.target_star,
+                    target_pp=args.target_pp,
+                )
+            )
             return 0
         if args.audio:
             json_print(

@@ -6,7 +6,7 @@ from pathlib import Path
 from osu_lab.beatmap.io import compile_osu, parse_osu
 from osu_lab.beatmap.validate import verify_beatmap
 from osu_lab.beatmap.verify_external import run_external_verifier
-from osu_lab.eval.bench import benchmark_audio_tracking, benchmark_style_control
+from osu_lab.eval.bench import benchmark_audio_tracking, benchmark_auto_workflow, benchmark_style_control
 from osu_lab.generate.mapforge import generate_map
 from osu_lab.replay.synth import inspect_replay, synthesize_replay_plan, write_replay
 
@@ -201,6 +201,16 @@ def run_acceptance(
             prompts=prompts,
             reference_maps=reference_maps,
             seed=seed,
+        )
+        report["auto_workflow"] = benchmark_auto_workflow(
+            audio_path=audio_path,
+            output_dir=Path(output_dir) / "auto-workflow",
+            prompt=prompts[0],
+            refs=reference_maps,
+            seed=seed,
+            candidate_count=max(2, len(prompts)),
+            target_star=target_star,
+            target_pp=target_pp,
         )
     statuses = [section.get("status", "ok") for section in report.values() if isinstance(section, dict)]
     report["status"] = "ok" if statuses and all(status == "ok" for status in statuses) else "warn"

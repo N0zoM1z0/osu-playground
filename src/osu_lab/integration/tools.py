@@ -9,12 +9,14 @@ from osu_lab.beatmap.verify_external import run_external_verifier
 from osu_lab.beatmap.validate import verify_beatmap
 from osu_lab.core.models import StyleTarget
 from osu_lab.core.utils import dataclass_to_dict
+from osu_lab.eval.map_quality import evaluate_map_quality
 from osu_lab.generate.mapforge import arrange_objects, draft_skeleton
 from osu_lab.integration.scoring import score_map
 from osu_lab.live.planner import plan_live_play
 from osu_lab.replay.synth import synthesize_replay_plan
 from osu_lab.style.corpus import build_style_index
 from osu_lab.style.profile import build_style_profile, classify_map, render_style_report
+from osu_lab.workflows.auto_map import run_auto_map
 
 
 def analyze_audio_tool(path: str) -> dict[str, object]:
@@ -43,6 +45,10 @@ def arrange_objects_tool(beatmap_ir_path: str, style_tags: list[str]) -> dict[st
 
 def score_map_tool(path: str, mods: str, acc: float) -> dict[str, object]:
     return score_map(path, mods=mods, acc=acc)
+
+
+def map_quality_tool(path: str) -> dict[str, object]:
+    return dataclass_to_dict(evaluate_map_quality(parse_osu(path)))
 
 
 def classify_map_tool(path: str) -> dict[str, object]:
@@ -77,3 +83,7 @@ def plan_live_play_tool(map_path_or_tosu_context: str, profile: str, provider: s
 
 def ai_draft_tool(backend: str, audio_path: str, prompt: str = "mixed") -> dict[str, object]:
     return draft_with_backend(backend, audio_path, prompt=prompt)
+
+
+def auto_map_tool(audio_path: str, output_dir: str, prompt: str, refs: list[str] | None = None) -> dict[str, object]:
+    return run_auto_map(audio_path, output_dir=output_dir, prompt=prompt, refs=refs or [])
