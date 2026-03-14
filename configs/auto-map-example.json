@@ -1,0 +1,12 @@
+{
+  "audio": "C:/music/song.mp3",
+  "prompt": "flow aim with chorus jump lift",
+  "refs": [
+    "C:/osu/Songs/reference-pack"
+  ],
+  "target_stars": 6.3,
+  "target_pp": 280.0,
+  "candidate_count": 4,
+  "seed": 7,
+  "keep_intermediate": true
+}

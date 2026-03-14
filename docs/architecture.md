@@ -8,6 +8,7 @@
 2. normalize them into validated IR
 3. run replay generation, scoring, profiling, or mapping logic against IR
 4. compile back to `.osu` / `.osz` / `.osr`
+5. rank and promote the best auto-mapping candidate
 
 The main rule is that agent-facing tools operate on structured objects, not on raw `.osu` text.
 
@@ -19,7 +20,7 @@ The main rule is that agent-facing tools operate on structured objects, not on r
 - `live`: replay-to-live event planning, `tosu` provider fetch, Windows injection
 - `audio`: WAV normalization and beat/segment analysis
 - `style`: spacing, angle, density, corpus indexing, and heuristic classification profiles
-- `generate`: rule-based skeleton drafting and object arrangement
+- `generate`: timing authoring, note selection, phrase planning, candidate search, and arrangement
 - `ai`: optional external CLI adapters with structured recipe normalization
 - `integration`: scoring and agent-callable tool wrappers
 - `eval`: benchmark placeholders and acceptance harness entry points
@@ -70,9 +71,18 @@ Fallback backend:
 
 ### Generation
 
-`AudioAnalysis` + `StyleTarget` -> draft timing grid -> arranged `BeatmapIR`
+`AudioAnalysis` + prompt + refs -> timing draft -> note selection -> phrase plan -> candidate search -> arranged `BeatmapIR`
 
-The current generator is deterministic and target-aware. It maps prompt tags into spacing, density, and path heuristics, then runs a short local tuning loop against `rosu-pp-py`:
+The current generator is deterministic and target-aware. The primary `map auto` path now layers:
+
+- prompt parsing and style policy resolution
+- timing authoring
+- note selection with selected and rejected event traces
+- phrase planning
+- multi-candidate search
+- quality-based ranking
+
+The underlying arranger still maps prompt tags into spacing, density, and path heuristics, then runs a local fitting loop against `rosu-pp-py`:
 
 - `flow aim`: arc-like movement and occasional sliders
 - `jump`: large spacing with simpler rhythms
@@ -89,13 +99,14 @@ The tuning loop adjusts:
 
 and keeps the best candidate against requested star and pp targets.
 
-The generator is now section-aware:
+The generator is now section-aware and phrase-aware:
 
 - it derives a section density plan from audio segments
 - it can blend in density tendencies from a local reference corpus
 - it can consume explicit reference maps supplied by the user at generation time
 - it assigns simple hitsounds and adjusts object mix by section label
 - it adapts retrieved reference patterns with continuity-aware mirroring, rotation, and rescaling before stitching them into the arranged output
+- it emits phrase plans, selection traces, arrangement provenance, and ranked candidate reports
 
 ### Style Corpus
 
@@ -166,8 +177,13 @@ Recommended agent tools:
 
 - `analyze_audio(path)`
 - `build_style_profile(ref_maps)`
+- `author_timing(audio_analysis, style_policy)`
+- `select_events(audio_analysis, style_policy)`
+- `plan_phrases(selected_events, style_policy)`
 - `draft_skeleton(audio_analysis, style_target)`
 - `arrange_objects(beatmap_ir, style_profile)`
+- `evaluate_map_quality(path)`
+- `run_auto_map(audio, prompt, refs)`
 - `score_map(path, mods, acc)`
 - `classify_map(path)`
 - `verify_map(path)`

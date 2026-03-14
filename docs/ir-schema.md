@@ -51,6 +51,77 @@ Primary IR types:
 - `section_density_curve`
 - `source_maps`
 
+## NoteSelectionConfig
+
+- `chart_source_bias`
+- `onset_gate`
+- `anchor_downbeat_bonus`
+- `phrase_peak_bonus`
+- `rest_gate`
+- `repetition_window_ms`
+- `max_density_multiplier`
+
+## SelectedEvent
+
+- `time_ms`
+- `role`
+- `confidence`
+- `selected`
+- `source`
+- `section_label`
+- `phrase_index`
+- `reason`
+- `features`
+
+## TimingDraft
+
+- `bpm`
+- `offset_ms`
+- `uninherited_points`
+- `inherited_points`
+- `breaks`
+- `kiai_ranges`
+- `preview_time_ms`
+- `report`
+
+## StylePolicyPack
+
+- `name`
+- `density_policy`
+- `rhythm_simplification`
+- `note_selection_bias`
+- `spacing_schedule`
+- `angle_policy`
+- `slider_policy`
+- `phrase_continuity`
+- `chorus_lift`
+- `strain_choreography`
+- `repetition_policy`
+- `rest_policy`
+- `hitsound_policy`
+- `sv_policy`
+- `ranking_weights`
+
+## PhrasePlan
+
+- `section_label`
+- `phrase_index`
+- `start_ms`
+- `end_ms`
+- `energy`
+- `movement_kind`
+- `expected_density`
+- `event_count`
+- `notes`
+
+## MapQualityReport
+
+- `overall_score`
+- `metrics`
+- `warnings`
+- `regeneration_hints`
+- `section_scores`
+
 ## HitObjectIR
 
 - `type`

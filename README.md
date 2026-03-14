@@ -6,7 +6,7 @@ This repository implements a CLI-first Python package that prioritizes:
 
 - deterministic beatmap parsing and compilation
 - replay synthesis for offline `.osr` experimentation
-- offline audio analysis and rule-based map drafting
+- offline audio analysis and automatic mapping workflows
 - style profiling from local reference maps
 - agent-safe IR editing instead of raw `.osu` text generation
 
@@ -19,6 +19,7 @@ The current implementation provides a working v0.1 foundation:
 - `.osz` packaging
 - deterministic `.osr` synthesis using `osrparse`
 - fallback WAV audio analysis plus optional `allin1`
+- explicit timing authoring, note selection, phrase planning, and candidate search for auto-mapping
 - iterative rule-based generator for prompts such as `flow aim`, `jump`, `farm jump`, `stream`, `deathstream`
 - style profiling, local corpus indexing, and map classification heuristics
 - `tosu`-compatible live planning via current-beatmap file fetch
@@ -61,6 +62,19 @@ Generate a draft beatmap package:
 
 ```bash
 osu-lab map generate /path/to/song.wav --out-dir /tmp/out --prompt "flow aim,jump" --seed 7
+```
+
+Run the end-to-end automatic mapping workflow:
+
+```bash
+osu-lab map auto \
+  --audio /path/to/song.mp3 \
+  --prompt "flow aim with chorus jump lift" \
+  --refs /path/to/reference-pack \
+  --target-stars 6.3 \
+  --target-pp 280 \
+  --candidate-count 4 \
+  --out /tmp/auto-run
 ```
 
 Generate with star targeting and inspect verifier output:
@@ -120,6 +134,7 @@ Score a map with `rosu-pp-py`:
 
 ```bash
 osu-lab map score /path/to/map.osu --mods HDDT --acc 98.5
+osu-lab map quality /path/to/map.osu
 ```
 
 ## CLI Surface
@@ -132,7 +147,9 @@ Implemented commands:
 - `osu-lab live plan`
 - `osu-lab live arm`
 - `osu-lab map generate`
+- `osu-lab map auto`
 - `osu-lab map verify`
+- `osu-lab map quality`
 - `osu-lab map score`
 - `osu-lab style build-index`
 - `osu-lab style profile`
@@ -177,6 +194,8 @@ docs/
 - `ai draft kimi` uses Moonshot's international OpenAI-compatible endpoint at `https://api.moonshot.ai/v1`; this is distinct from the `.cn` platform.
 - file-producing backends can be enabled with `OSU_LAB_<BACKEND>_ROOT` or `OSU_LAB_<BACKEND>_COMMAND_TEMPLATE`; successful drafts are re-profiled and fed back through the local post-processing pipeline.
 - `style build-index` is the intended way to learn from a user-supplied local corpus without bundling third-party beatmaps into the repository.
+- `map auto` is now the primary product workflow: it runs analysis, timing authoring, note selection, phrase planning, candidate search, ranking, and final promotion in one command.
+- note selection and timing authoring are explicit subsystems with JSON artifacts instead of hidden steps inside the arranger.
 - `map generate` can consume both `--reference-map` inputs and a prebuilt `--style-index`, and now emits a section density plan in the resulting `style_target`.
 - `style build-index` now stores a lightweight pattern bank, and `map generate` can stamp retrieved reference patterns into the arranged output instead of relying only on global histogram bias.
 - stitched reference patterns are now continuity-aware: they can be mirrored, rotated, and rescaled before placement to better fit section spacing and playfield bounds.
@@ -184,10 +203,16 @@ docs/
 - `style profile` and `map generate` now emit a human-readable style report alongside raw metrics.
 - `bench --acceptance` aggregates round-trip stability, replay determinism, generated-map validity, difficulty targeting, and style controllability in one JSON report.
 - `bench --audio-manifest` evaluates BPM and beat-timing error from a user-supplied benchmark manifest.
+- `bench --auto-workflow` checks end-to-end candidate-ranking stability for the new auto-mapping path.
 
 ## Docs
 
 - [Architecture](docs/architecture.md)
+- [Auto-Mapping Workflow](docs/auto-mapping-workflow.md)
+- [Benchmarking Guide](docs/benchmarking.md)
+- [Style Policy Guide](docs/style-policies.md)
+- [Report Formats](docs/report-formats.md)
+- [Pipeline Refactor Note](docs/pipeline-refactor.md)
 - [IR Schema](docs/ir-schema.md)
 - [Offline Smoke Tests](docs/smoke-test.md)
 - [Example Config](configs/example-config.json)
